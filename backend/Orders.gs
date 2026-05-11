@@ -3,26 +3,36 @@
 var Orders = {
 
   getOrders: function (page, pageSize, filters) {
-    page     = Math.max(1, parseInt(page)    || 1);
+    page     = Math.max(1, parseInt(page)     || 1);
     pageSize = Math.min(200, parseInt(pageSize) || 50);
     var offset = (page - 1) * pageSize;
 
     var ord = BQ.tableRef(CONFIG.BQ.TABLES.ORDERS);
     var inv = BQ.tableRef(CONFIG.BQ.TABLES.INVENTORY);
 
+    filters = filters || {};
     var conds = [];
-    filters   = filters || {};
-    if (filters.sku)      conds.push("o.sku LIKE '%" + Util.escapeSql(filters.sku) + "%'");
+
     if (filters.platform) conds.push("o.platform = '" + Util.escapeSql(filters.platform) + "'");
     if (filters.dateFrom) conds.push("DATE(o.order_date) >= '" + Util.escapeSql(filters.dateFrom) + "'");
     if (filters.dateTo)   conds.push("DATE(o.order_date) <= '" + Util.escapeSql(filters.dateTo) + "'");
     if (filters.search) {
       var s = Util.escapeSql(filters.search);
-      conds.push("(o.order_id LIKE '%" + s + "%' OR o.sku LIKE '%" + s + "%' OR o.upc LIKE '%" + s + "%')");
+      conds.push(
+        "(o.order_id LIKE '%" + s + "%'" +
+        " OR o.sku LIKE '%" + s + "%'" +
+        " OR o.upc LIKE '%" + s + "%')"
+      );
     }
+
+    // Status filter requires the inventory LEFT JOIN result
+    var needsInvJoin = !!filters.status;
+    if (filters.status === 'undefined') conds.push('i.sku IS NULL');
+    if (filters.status === 'matched')   conds.push('i.sku IS NOT NULL');
 
     var where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
 
+    // Always join inventory so is_undefined_sku can be computed
     var dataSql = [
       'SELECT',
       '  o.order_id,',
@@ -32,7 +42,6 @@ var Orders = {
       '  CAST(o.quantity_sold AS INT64)                       AS quantity_sold,',
       "  COALESCE(o.platform, '')                             AS platform,",
       "  COALESCE(o.shipped_from_box, '')                     AS shipped_from_box,",
-      "  COALESCE(o.source_file, '')                          AS source_file,",
       '  CASE WHEN i.sku IS NULL THEN TRUE ELSE FALSE END     AS is_undefined_sku',
       'FROM `' + ord + '` o',
       'LEFT JOIN `' + inv + '` i ON o.sku = i.sku',
@@ -41,9 +50,12 @@ var Orders = {
       'LIMIT ' + pageSize + ' OFFSET ' + offset
     ].join('\n');
 
-    var countSql = [
+    // Count query needs the inventory join only when status filter is active
+    var countJoin  = needsInvJoin ? 'LEFT JOIN `' + inv + '` i ON o.sku = i.sku' : '';
+    var countSql   = [
       'SELECT COUNT(*) AS total',
       'FROM `' + ord + '` o',
+      countJoin,
       where
     ].join('\n');
 
@@ -51,10 +63,8 @@ var Orders = {
     var countRows = BQ.runQuery(countSql);
     var total     = countRows && countRows[0] ? Number(countRows[0].total) : 0;
 
-    return {
-      items:      items,
-      pagination: { page: page, pageSize: pageSize, total: total, totalPages: Math.ceil(total / pageSize) }
-    };
+    // Return rows + top-level total to match frontend expectations
+    return { rows: items, total: total };
   },
 
   getOrderStats: function () {
@@ -91,7 +101,7 @@ var Orders = {
   },
 
   getPerformanceData: function (weeks) {
-    weeks  = Math.min(52, parseInt(weeks) || 12);
+    weeks = Math.min(52, parseInt(weeks) || 12);
     var ord = BQ.tableRef(CONFIG.BQ.TABLES.ORDERS);
     var inv = BQ.tableRef(CONFIG.BQ.TABLES.INVENTORY);
 

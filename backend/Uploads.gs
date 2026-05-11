@@ -200,7 +200,15 @@ var Uploads = {
     var invTbl = CONFIG.BQ.TABLES.INVENTORY_UPLOADS;
     var ordTbl = CONFIG.BQ.TABLES.ORDER_UPLOADS;
 
-    var cols = 'upload_id, filename, uploaded_by, uploaded_at, type, status, row_count, error_count, notes';
+    // Alias DB column names to what the frontend expects:
+    //   type        → upload_type
+    //   row_count   → rows_inserted
+    //   error_count → rows_skipped
+    var cols = [
+      'upload_id, filename, uploaded_by, uploaded_at,',
+      'type AS upload_type, status,',
+      'row_count AS rows_inserted, error_count AS rows_skipped, notes'
+    ].join(' ');
 
     var invSql = "SELECT " + cols + " FROM `" + BQ.tableRef(invTbl) + "`";
     var ordSql = "SELECT " + cols + " FROM `" + BQ.tableRef(ordTbl) + "`";

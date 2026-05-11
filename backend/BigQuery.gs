@@ -2,8 +2,10 @@
 
 var BQ = {
 
+  // tableName is expected to be a dataset.table string (e.g. 'patman_inventory.inventory')
+  // as produced by the TABLES constants in Config.gs.
   tableRef: function (tableName) {
-    return CONFIG.BQ.PROJECT_ID + '.' + CONFIG.BQ.DATASET + '.' + tableName;
+    return CONFIG.BQ.PROJECT_ID + '.' + tableName;
   },
 
   // Execute a SQL query and return an array of plain row objects.
@@ -65,11 +67,16 @@ var BQ = {
         ignoreUnknownValues: false
       };
 
+      // tableName is 'dataset.table' — split for the Tabledata API
+      var parts     = tableName.split('.');
+      var datasetId = parts[0];
+      var tableId   = parts[1];
+
       var resp = BigQuery.Tabledata.insertAll(
         insertRequest,
         CONFIG.BQ.PROJECT_ID,
-        CONFIG.BQ.DATASET,
-        tableName
+        datasetId,
+        tableId
       );
 
       if (resp.insertErrors && resp.insertErrors.length > 0) {

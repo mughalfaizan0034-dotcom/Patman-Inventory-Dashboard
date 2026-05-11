@@ -28,7 +28,6 @@ var Auth = {
       var user  = rows[0];
       var token = Auth._createSession(user);
 
-      // Update last_login (best-effort; don't fail login if this fails)
       try {
         BQ.runDML(
           'UPDATE `' + BQ.tableRef(CONFIG.BQ.TABLES.USERS) + '`' +
@@ -42,10 +41,10 @@ var Auth = {
       return Util.success({
         token: token,
         user: {
-          userId:      user.user_id,
-          email:       user.email,
-          displayName: user.display_name,
-          role:        user.role
+          user_id:      user.user_id,
+          email:        user.email,
+          display_name: user.display_name,
+          role:         user.role
         }
       });
 
@@ -68,7 +67,20 @@ var Auth = {
     if (!token) return null;
     try {
       var raw = CacheService.getScriptCache().get('sess_' + token);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      var session = JSON.parse(raw);
+
+      // Normalize legacy camelCase sessions to snake_case
+      if (session.userId && !session.user_id) {
+        session.user_id      = session.userId;
+        session.display_name = session.displayName || '';
+        session.created_at   = session.createdAt   || '';
+        delete session.userId;
+        delete session.displayName;
+        delete session.createdAt;
+      }
+
+      return session;
     } catch (e) {
       return null;
     }
@@ -81,27 +93,25 @@ var Auth = {
   },
 
   requireRole: function (token, minRole) {
-    var session    = Auth.requireAuth(token);
-    var userLevel  = CONFIG.AUTH.ROLE_HIERARCHY[session.role]    || 0;
-    var reqLevel   = CONFIG.AUTH.ROLE_HIERARCHY[minRole]         || 0;
+    var session   = Auth.requireAuth(token);
+    var userLevel = CONFIG.AUTH.ROLE_HIERARCHY[session.role] || 0;
+    var reqLevel  = CONFIG.AUTH.ROLE_HIERARCHY[minRole]      || 0;
     if (userLevel < reqLevel) throw new Error('FORBIDDEN');
     return session;
   },
 
   // One-time bootstrap — run manually in the Apps Script editor to create the super admin.
-  // After running, delete or comment out this function for security.
   bootstrapAdminUser: function () {
     var email    = 'mughalfaizan0034@gmail.com';
     var password = '1224a659';
     var hash     = Auth._hash(password);
 
-    // Remove any existing record for this email first (idempotent re-run)
     try {
       BQ.runDML(
         'DELETE FROM `' + BQ.tableRef(CONFIG.BQ.TABLES.USERS) + '`' +
         " WHERE email = '" + email + "'"
       );
-    } catch (e) { /* table may be empty — safe to ignore */ }
+    } catch (e) { /* table may be empty */ }
 
     BQ.insertRows(CONFIG.BQ.TABLES.USERS, [{
       user_id:       Util.generateId(),
@@ -122,11 +132,11 @@ var Auth = {
     CacheService.getScriptCache().put(
       'sess_' + token,
       JSON.stringify({
-        userId:      user.user_id,
-        email:       user.email,
-        displayName: user.display_name,
-        role:        user.role,
-        createdAt:   new Date().toISOString()
+        user_id:      user.user_id,
+        email:        user.email,
+        display_name: user.display_name,
+        role:         user.role,
+        created_at:   new Date().toISOString()
       }),
       CONFIG.AUTH.SESSION_CACHE_SECONDS
     );

@@ -53,9 +53,13 @@ var Users = {
   updateUser: function (userId, updates) {
     if (!userId) return Util.error('userId is required');
 
+    updates = updates || {};
     var sets = [];
-    if (updates.displayName !== undefined) {
-      sets.push("display_name = '" + Util.escapeSql(updates.displayName) + "'");
+
+    // Accept both snake_case (frontend) and camelCase (legacy)
+    var displayName = updates.display_name !== undefined ? updates.display_name : updates.displayName;
+    if (displayName !== undefined) {
+      sets.push("display_name = '" + Util.escapeSql(String(displayName)) + "'");
     }
     if (updates.role !== undefined) {
       var validRoles = Object.values(CONFIG.AUTH.ROLES);
@@ -64,8 +68,9 @@ var Users = {
       }
       sets.push("role = '" + Util.escapeSql(updates.role) + "'");
     }
-    if (updates.isActive !== undefined) {
-      sets.push('is_active = ' + (updates.isActive ? 'TRUE' : 'FALSE'));
+    var isActive = updates.is_active !== undefined ? updates.is_active : updates.isActive;
+    if (isActive !== undefined) {
+      sets.push('is_active = ' + (isActive === true || isActive === 'true' ? 'TRUE' : 'FALSE'));
     }
     if (updates.password) {
       sets.push("password_hash = '" + Auth._hash(updates.password) + "'");

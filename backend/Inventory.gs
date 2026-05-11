@@ -2,12 +2,14 @@
 
 var Inventory = {
 
-  // Home-page KPIs — all calculated server-side in BigQuery.
+  // Dashboard KPIs — all calculated server-side in BigQuery.
   getDashboardKPIs: function () {
-    var inv = BQ.tableRef(CONFIG.BQ.TABLES.INVENTORY);
-    var ord = BQ.tableRef(CONFIG.BQ.TABLES.ORDERS);
+    var inv    = BQ.tableRef(CONFIG.BQ.TABLES.INVENTORY);
+    var ord    = BQ.tableRef(CONFIG.BQ.TABLES.ORDERS);
+    var invUpl = BQ.tableRef(CONFIG.BQ.TABLES.INVENTORY_UPLOADS);
+    var ordUpl = BQ.tableRef(CONFIG.BQ.TABLES.ORDER_UPLOADS);
 
-    var sql = [
+    var kpiSql = [
       'WITH sku_calc AS (',
       '  SELECT',
       '    i.sku,',
@@ -28,44 +30,71 @@ var Inventory = {
       '  WHERE i.sku IS NULL',
       ')',
       'SELECT',
-      '  SUM(s.initial_stock)                                    AS total_initial_stock,',
-      '  SUM(s.units_sold)                                       AS units_sold,',
-      '  SUM(s.phantom_units)                                    AS phantom_units,',
-      '  SUM(s.remaining_stock)                                  AS remaining_stock,',
-      '  COUNTIF(s.remaining_stock > 0)                         AS in_stock_count,',
-      '  COUNTIF(s.remaining_stock = 0)                         AS sold_out_count,',
-      '  COUNT(DISTINCT s.sku)                                   AS total_skus,',
-      '  (SELECT COUNT(DISTINCT upc) FROM `' + inv + '`)        AS total_upcs,',
-      '  u.undefined_sku_sales',
+      '  COUNT(DISTINCT s.sku)                                    AS total_skus,',
+      '  SUM(s.initial_stock)                                     AS total_units,',
+      '  SUM(s.units_sold)                                        AS units_sold,',
+      '  SUM(s.phantom_units)                                     AS phantom_units,',
+      '  SUM(s.remaining_stock)                                   AS remaining_stock,',
+      '  u.undefined_sku_sales,',
+      '  (SELECT COUNT(DISTINCT CASE',
+      '     WHEN platform IS NOT NULL AND TRIM(platform) != \'\' THEN platform END)',
+      '   FROM `' + ord + '`)                                     AS active_platforms,',
+      '  (SELECT CAST(MAX(uploaded_at) AS STRING)',
+      '   FROM (SELECT uploaded_at FROM `' + invUpl + '`',
+      '         UNION ALL',
+      '         SELECT uploaded_at FROM `' + ordUpl + '`))        AS last_upload_date',
       'FROM sku_calc s',
       'CROSS JOIN undef u'
     ].join('\n');
 
-    var rows = BQ.runQuery(sql);
-    if (!rows || !rows.length) {
-      return {
-        totalInitialStock: 0, unitsSold: 0, phantomUnits: 0, undefinedSkuSales: 0,
-        remainingStock: 0, totalUpcs: 0, inStockCount: 0, soldOutCount: 0, totalSkus: 0
-      };
+    var rows = BQ.runQuery(kpiSql);
+    var r    = (rows && rows.length) ? rows[0] : {};
+
+    var result = {
+      totalSkus:         Number(r.total_skus)         || 0,
+      totalUnits:        Number(r.total_units)        || 0,
+      unitsSold:         Number(r.units_sold)         || 0,
+      phantomUnits:      Number(r.phantom_units)      || 0,
+      remainingStock:    Number(r.remaining_stock)    || 0,
+      undefinedSkuSales: Number(r.undefined_sku_sales)|| 0,
+      activePlatforms:   Number(r.active_platforms)   || 0,
+      lastUploadDate:    r.last_upload_date            || null
+    };
+
+    // Recent activity — last 5 completed uploads
+    try {
+      var actSql = [
+        'SELECT filename, type AS upload_type, uploaded_at, status',
+        'FROM (',
+        '  SELECT filename, type, uploaded_at, status FROM `' + invUpl + '`',
+        '  UNION ALL',
+        '  SELECT filename, type, uploaded_at, status FROM `' + ordUpl + '`',
+        ')',
+        "WHERE status IN ('success', 'failed')",
+        'ORDER BY uploaded_at DESC',
+        'LIMIT 5'
+      ].join('\n');
+
+      var actRows = BQ.runQuery(actSql) || [];
+      result.recentActivity = actRows.map(function (a) {
+        var isInv = a.upload_type === 'inventory';
+        return {
+          icon:  a.status === 'success' ? (isInv ? '📦' : '🛒') : '⚠️',
+          title: (a.status === 'success' ? 'Uploaded ' : 'Upload failed: ') +
+                 (a.filename || (isInv ? 'inventory' : 'orders')),
+          date:  a.uploaded_at
+        };
+      });
+    } catch (_) {
+      result.recentActivity = [];
     }
 
-    var r = rows[0];
-    return {
-      totalInitialStock: Number(r.total_initial_stock)  || 0,
-      unitsSold:         Number(r.units_sold)           || 0,
-      phantomUnits:      Number(r.phantom_units)        || 0,
-      undefinedSkuSales: Number(r.undefined_sku_sales)  || 0,
-      remainingStock:    Number(r.remaining_stock)      || 0,
-      totalUpcs:         Number(r.total_upcs)           || 0,
-      inStockCount:      Number(r.in_stock_count)       || 0,
-      soldOutCount:      Number(r.sold_out_count)       || 0,
-      totalSkus:         Number(r.total_skus)           || 0
-    };
+    return result;
   },
 
-  // Paginated inventory list with per-SKU calculated fields.
+  // Paginated inventory list with per-SKU stock calculations.
   getInventoryList: function (page, pageSize, search) {
-    page     = Math.max(1, parseInt(page)    || 1);
+    page     = Math.max(1, parseInt(page)     || 1);
     pageSize = Math.min(200, parseInt(pageSize) || 50);
     var offset = (page - 1) * pageSize;
 
@@ -111,17 +140,14 @@ var Inventory = {
       searchWhere
     ].join('\n');
 
-    var items      = BQ.runQuery(dataSql) || [];
-    var countRows  = BQ.runQuery(countSql);
-    var total      = countRows && countRows[0] ? Number(countRows[0].total) : 0;
+    var items     = BQ.runQuery(dataSql) || [];
+    var countRows = BQ.runQuery(countSql);
+    var total     = countRows && countRows[0] ? Number(countRows[0].total) : 0;
 
-    return {
-      items: items,
-      pagination: { page: page, pageSize: pageSize, total: total, totalPages: Math.ceil(total / pageSize) }
-    };
+    return { items: items, total: total };
   },
 
-  // Box Lookup — search by SKU, UPC, or part number.
+  // Box Lookup — search by SKU, UPC, part number, or box number.
   searchBox: function (query) {
     if (!query || !query.trim()) return { items: [] };
 
