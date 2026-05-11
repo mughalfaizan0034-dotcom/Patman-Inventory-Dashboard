@@ -18,7 +18,7 @@ export function createTokenFactory(fastify) {
     },
 
     signRefreshToken(user) {
-      return fastify.refreshJwt.sign(
+      return fastify.jwt.sign(
         { user_id: user.user_id, type: 'refresh' },
         { expiresIn: env.JWT_REFRESH_EXPIRES }
       );

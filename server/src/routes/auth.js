@@ -49,7 +49,7 @@ export async function authRoutes(fastify, { authService, usersRepo, tokenFactory
     }
 
     try {
-      const payload = await fastify.refreshJwt.verify(parsed.data.refresh_token);
+      const payload = await fastify.jwt.verify(parsed.data.refresh_token);
       if (payload.type !== 'refresh') {
         return reply.code(401).send({ success: false, error: 'Invalid token type' });
       }

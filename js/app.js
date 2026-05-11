@@ -117,18 +117,18 @@ const Settings = (() => {
           <td>
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:28px;height:28px;border-radius:50%;background:var(--primary-100);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--primary-text);flex-shrink:0">
-                ${Utils.escapeHtml((u.display_name || u.email || '?')[0].toUpperCase())}
+                ${Utils.escapeHtml((u.display_name || u.username || u.email || '?')[0].toUpperCase())}
               </div>
               <span style="font-weight:500">${Utils.escapeHtml(u.display_name || '—')}</span>
             </div>
           </td>
-          <td>${Utils.escapeHtml(u.email)}</td>
+          <td>${Utils.escapeHtml(u.email || u.username || '—')}</td>
           <td>${Utils.badgeHtml(u.role === 'admin' ? 'error' : u.role === 'manager' ? 'warning' : 'gray', Utils.capitalize(u.role))}</td>
           <td>${u.is_active !== false ? Utils.badgeHtml('success', 'Active') : Utils.badgeHtml('gray', 'Inactive')}</td>
           <td>
             <div style="display:flex;gap:4px">
               <button class="btn btn-secondary btn-sm" onclick="Settings._edit('${Utils.escapeHtml(u.user_id)}')">Edit</button>
-              ${u.email !== currentUser?.email ? `<button class="btn btn-danger btn-sm" onclick="Settings._delete('${Utils.escapeHtml(u.user_id)}', '${Utils.escapeHtml(u.display_name || u.email)}')">Delete</button>` : ''}
+              ${u.user_id !== currentUser?.user_id ? `<button class="btn btn-danger btn-sm" onclick="Settings._delete('${Utils.escapeHtml(u.user_id)}', '${Utils.escapeHtml(u.display_name || u.username || u.email)}')">Delete</button>` : ''}
             </div>
           </td>
         </tr>`).join('');
@@ -215,12 +215,12 @@ const Settings = (() => {
     const user = Auth.getUser();
     if (!user) return;
 
-    Utils.setText('#profile-name',  user.display_name);
-    Utils.setText('#profile-email', user.email);
+    Utils.setText('#profile-name',  user.display_name || user.username);
+    Utils.setText('#profile-email', user.email || user.username);
     Utils.setText('#profile-role',  Utils.capitalize(user.role));
 
     const avatarEl = document.getElementById('profile-avatar');
-    if (avatarEl) avatarEl.textContent = (user.display_name || user.email || '?')[0].toUpperCase();
+    if (avatarEl) avatarEl.textContent = (user.display_name || user.username || user.email || '?')[0].toUpperCase();
   }
 
   /* ── Tab switching ──────────────────────────────────────── */
@@ -314,10 +314,10 @@ const App = (() => {
   function _bindSidebarUser() {
     const user = Auth.getUser();
     if (!user) return;
-    Utils.setText('.sidebar-user-name', user.display_name || user.email);
+    Utils.setText('.sidebar-user-name', user.display_name || user.username || user.email);
     Utils.setText('.sidebar-user-role', Utils.capitalize(user.role));
     const av = document.querySelector('.sidebar-avatar');
-    if (av) av.textContent = (user.display_name || user.email || '?')[0].toUpperCase();
+    if (av) av.textContent = (user.display_name || user.username || user.email || '?')[0].toUpperCase();
   }
 
   function showApp() {

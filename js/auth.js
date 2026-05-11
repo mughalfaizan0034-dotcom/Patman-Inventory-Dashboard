@@ -111,9 +111,49 @@ const Auth = (() => {
     App.showLogin();
   }
 
+  /* ── JWT expiry helper ──────────────────────────────────── */
+  function _tokenExpiresAt(token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp ? payload.exp * 1000 : null;
+    } catch { return null; }
+  }
+
   /* ── Session verification on page load ──────────────────── */
   async function checkSession() {
-    if (!getToken()) return false;
+    const token = getToken();
+    if (!token) return false;
+
+    if (CONFIG.CLOUD_RUN_URL) {
+      const expMs = _tokenExpiresAt(token);
+      const now   = Date.now();
+
+      if (expMs && now >= expMs) {
+        // Token fully expired — must refresh or fail
+        const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
+        if (!storedRefresh) { clearSession(); return false; }
+        try {
+          const data = await API.refreshToken(storedRefresh);
+          saveSession(data.access_token, getUser());
+        } catch { clearSession(); return false; }
+      } else if (expMs && expMs - now < 2 * 60 * 1000) {
+        // Proactively refresh within 2 min of expiry (best-effort)
+        const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
+        if (storedRefresh) {
+          try {
+            const data = await API.refreshToken(storedRefresh);
+            saveSession(data.access_token, getUser());
+          } catch { /* keep current token; it's still valid */ }
+        }
+      }
+
+      const user = getUser();
+      if (user) return true;
+      clearSession();
+      return false;
+    }
+
+    // Apps Script path
     try {
       const result = await API.verifySession();
       if (result && result.user) {

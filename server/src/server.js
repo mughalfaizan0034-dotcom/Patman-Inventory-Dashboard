@@ -82,8 +82,7 @@ export async function buildApp() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
-  fastify.register(jwt,  { secret: env.JWT_SECRET });
-  fastify.register(jwt,  { secret: env.REFRESH_SECRET, namespace: 'refreshJwt' });
+  fastify.register(jwt, { secret: env.JWT_SECRET });
   fastify.register(sensible);
   fastify.register(bigqueryPlugin);
 

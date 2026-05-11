@@ -5,10 +5,10 @@ export function createOrganizationsRepository({ bq, projectId }) {
 
   async function findBySlug(slug) {
     const query = `
-      SELECT organization_id, organization_slug, organization_name, status, settings_json
+      SELECT organization_id, slug, display_name, is_active
       FROM ${table}
-      WHERE organization_slug = @slug
-        AND status = 'active'
+      WHERE slug = @slug
+        AND is_active = TRUE
       LIMIT 1
     `;
     const [rows] = await bq.query({ query, params: { slug } });
@@ -17,7 +17,7 @@ export function createOrganizationsRepository({ bq, projectId }) {
 
   async function findById(organizationId) {
     const query = `
-      SELECT organization_id, organization_slug, organization_name, status, settings_json
+      SELECT organization_id, slug, display_name, is_active
       FROM ${table}
       WHERE organization_id = @organizationId
       LIMIT 1

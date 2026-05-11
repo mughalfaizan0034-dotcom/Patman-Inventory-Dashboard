@@ -18,6 +18,33 @@ const API = (() => {
     return sessionStorage.getItem(CONFIG.SESSION_KEY) || null;
   }
 
+  /* ── Cloud Run GET — query params, Bearer auth ──────────── */
+  async function _crGet(path, params = {}, retries = 0) {
+    const tok = getToken();
+    const url = new URL(CONFIG.CLOUD_RUN_URL + path);
+    for (const [key, value] of Object.entries(params)) {
+      if (value == null || value === '') continue;
+      url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+    }
+    const options = {
+      method:  'GET',
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    };
+
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await _fetchWithTimeout(url.toString(), options, CONFIG.TIMEOUT_MS);
+        return await _parseResponse(res);
+      } catch (err) {
+        lastErr = err;
+        if (err.serverError) throw err;
+        if (attempt < retries) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
   /* ── Cloud Run POST — JSON body, Bearer auth ────────────── */
   async function _crPost(path, body, retries = 0) {
     const tok = getToken();
@@ -150,6 +177,10 @@ const API = (() => {
       sessionStorage.removeItem('patman_refresh_token');
     },
 
+    async refreshToken(refreshToken) {
+      return _crPost('/auth/refresh', { refresh_token: refreshToken }, 0);
+    },
+
     async verifySession() {
       if (CONFIG.CLOUD_RUN_URL) {
         // JWT is stateless — if the token parses, session is valid.
@@ -177,6 +208,7 @@ const API = (() => {
     },
 
     async getInventoryList(page = 1, pageSize = CONFIG.PAGE_SIZE, search = '') {
+      if (CONFIG.CLOUD_RUN_URL) return _crGet('/inventory', { page, pageSize, search });
       return _get('getInventoryList', { page, pageSize, search });
     },
 
