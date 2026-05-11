@@ -6,32 +6,27 @@ const BoxLookup = (() => {
   let _lastData = null;
   let _activeTab = 'instock';
 
-  /* ── Stock badge helper ──────────────────────────────────── */
-  function _stockBadge(remaining) {
-    if (remaining > 0)  return `<span style="font-size:12px;font-weight:700;color:var(--success)">${Utils.formatNumber(remaining)}</span>`;
-    if (remaining === 0) return `<span style="font-size:12px;font-weight:700;color:var(--txt-4)">0 (OOS)</span>`;
-    return `<span style="font-size:12px;font-weight:700;color:var(--error)">${Utils.formatNumber(remaining)} (oversold)</span>`;
-  }
-
-  function _stockStatus(remaining) {
-    if (remaining > 0)  return '';
-    if (remaining === 0) return Utils.badgeHtml('warning', 'OOS');
-    return Utils.badgeHtml('error', 'Oversold');
+  /* ── Status pill ─────────────────────────────────────────── */
+  function _statusPill(remaining) {
+    if (remaining > 0)
+      return `<span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:rgba(22,163,74,.1);color:#15803d">In Stock</span>`;
+    if (remaining === 0)
+      return `<span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:rgba(234,88,12,.1);color:#c2410c">OOS</span>`;
+    return `<span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:rgba(220,38,38,.1);color:#dc2626">Phantom</span>`;
   }
 
   /* ── Box row renderer ─────────────────────────────────────── */
-  function _boxRow(box, isFirst = false) {
+  function _boxRow(box) {
     const rem = Number(box.remaining_stock ?? 0);
-    const rowBg = rem < 0 ? 'background:rgba(220,38,38,.05)' : rem === 0 ? 'background:rgba(180,180,180,.05)' : '';
+    const rowBg   = rem < 0 ? 'background:rgba(220,38,38,.04)' : rem === 0 ? 'background:rgba(180,180,180,.04)' : '';
+    const remColor = rem > 0 ? 'var(--success)' : rem === 0 ? 'var(--txt-4)' : 'var(--error)';
     return `
       <tr style="${rowBg}">
-        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(box.box_number || '—')}${isFirst ? ' <span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 5px;border-radius:3px;font-weight:600">ORIG</span>' : ''}</td>
-        <td style="font-family:monospace;font-size:12px">${Utils.escapeHtml(box.sku || '—')}</td>
-        <td>${Utils.escapeHtml(box.part_number || '—')}</td>
-        <td>${Utils.escapeHtml(box.upc || '—')}</td>
+        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(box.box_number || '—')}</td>
         <td class="num">${Utils.formatNumber(box.initial_stock)}</td>
         <td class="num">${Utils.formatNumber(box.units_sold)}</td>
-        <td class="num">${_stockBadge(rem)} ${_stockStatus(rem)}</td>
+        <td class="num" style="font-weight:600;color:${remColor}">${Utils.formatNumber(rem)}</td>
+        <td>${_statusPill(rem)}</td>
       </tr>`;
   }
 
@@ -39,27 +34,29 @@ const BoxLookup = (() => {
   function _renderGroup(group, filterFn) {
     const rows = [];
     for (const section of group) {
-      // section is {part_number, upcs:[{upc, boxes:[...]}]} or {upc, part_numbers:[...]}
       const subSections = section.upcs || section.part_numbers || [];
       for (const sub of subSections) {
         const boxes = (sub.boxes || []).filter(filterFn);
         if (!boxes.length) continue;
-        const subLabel = sub.upc != null ? `UPC ${sub.upc}` : `Part # ${sub.part_number}`;
+        const subLabel   = sub.upc != null ? `UPC ${sub.upc}` : `Part # ${sub.part_number}`;
         const groupLabel = section.part_number != null ? `Part Number: ${section.part_number}` : `UPC: ${section.upc}`;
         rows.push(`
           <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">
             <div style="background:var(--surface-2);padding:8px 16px;font-size:12px;font-weight:700;color:var(--txt-3);letter-spacing:.04em;text-transform:uppercase">${Utils.escapeHtml(groupLabel)}</div>
-            <div style="padding:6px 16px 2px;font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(subLabel)}</div>
+            <div style="padding:6px 16px 8px;font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(subLabel)}</div>
             <div class="table-wrap" style="border:none;margin:0">
-              <table class="data-table" style="font-size:12.5px">
+              <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Box #</th><th>SKU</th><th>Part #</th><th>UPC</th>
-                    <th class="num">Initial</th><th class="num">Sold</th><th class="num">Remaining</th>
+                    <th>Box #</th>
+                    <th class="num">Initial</th>
+                    <th class="num">Sold</th>
+                    <th class="num">Remaining</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${boxes.map((b, i) => _boxRow(b, i === 0)).join('')}
+                  ${boxes.map(b => _boxRow(b)).join('')}
                 </tbody>
               </table>
             </div>
