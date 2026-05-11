@@ -4,7 +4,7 @@ export function createInventoryRepository({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
   const ordTable = `\`${projectId}.${TABLES.ORDERS}\``;
 
-  async function findAll({ organizationId, page, pageSize, search, sortBy, sortDir, undefined_only }) {
+  async function findAll({ organizationId, page, pageSize, search, sortBy, sortDir, status = 'all' }) {
     const offset = (page - 1) * pageSize;
 
     const conditions = ['i.organization_id = @organizationId'];
@@ -15,10 +15,10 @@ export function createInventoryRepository({ bq, projectId }) {
       params.search = search.toLowerCase();
     }
 
-    if (undefined_only) {
+    if (status === 'undefined_only') {
       conditions.push(`(
-        UPPER(TRIM(COALESCE(i.sku, '')))         IN ('NA','N/A','')
-        OR UPPER(TRIM(COALESCE(i.upc, '')))      IN ('NA','N/A','')
+        UPPER(TRIM(COALESCE(i.sku, '')))           IN ('NA','N/A','')
+        OR UPPER(TRIM(COALESCE(i.upc, '')))        IN ('NA','N/A','')
         OR UPPER(TRIM(COALESCE(i.part_number,''))) IN ('NA','N/A','')
       )`);
     }
@@ -39,25 +39,36 @@ export function createInventoryRepository({ bq, projectId }) {
     const col = sortMap[sortBy] || 'i.date_added';
     const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
-    const dataQuery = `
+    // Stock-based filters require joining orders to compute remaining_stock
+    const needsStockFilter = status === 'in_stock' || status === 'out_of_stock';
+    const stockCond = needsStockFilter
+      ? `AND (i.quantity - COALESCE(o.units_sold, 0)) ${status === 'in_stock' ? '> 0' : '<= 0'}`
+      : '';
+
+    const cte = `
       WITH ord_summary AS (
         SELECT sku, SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
         GROUP BY sku
-      )
+      )`;
+
+    const dataQuery = `
+      ${cte}
       SELECT
         i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
         COALESCE(o.units_sold, 0) AS units_sold,
         i.quantity - COALESCE(o.units_sold, 0) AS remaining_stock
       FROM ${invTable} i
       LEFT JOIN ord_summary o ON i.sku = o.sku
-      ${where}
+      ${where} ${stockCond}
       ORDER BY ${col} ${dir}
       LIMIT ${pageSize} OFFSET ${offset}
     `;
 
-    const countQuery = `SELECT COUNT(*) AS total FROM ${invTable} i ${where}`;
+    const countQuery = needsStockFilter
+      ? `${cte} SELECT COUNT(*) AS total FROM ${invTable} i LEFT JOIN ord_summary o ON i.sku = o.sku ${where} ${stockCond}`
+      : `SELECT COUNT(*) AS total FROM ${invTable} i ${where}`;
 
     const [rows, countRows] = await Promise.all([
       bq.query({ query: dataQuery, params }),

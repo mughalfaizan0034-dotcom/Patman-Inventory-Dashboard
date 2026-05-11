@@ -169,10 +169,53 @@ const Orders = (() => {
     _updateDeleteBtn();
   }
 
-  /* ── Inline box selector ────────────────────────────────── */
-  function _closeInlineSelector() {
-    document.getElementById('inline-box-selector-row')?.remove();
-    document.querySelector('tr.inline-edit-active')?.classList.remove('inline-edit-active');
+  /* ── Inline box select (in shipped-from-box cell) ───────── */
+  function _restoreShippedCell(cell, boxValue) {
+    cell.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = boxValue || '-';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-icon btn-sm order-edit-btn';
+    btn.title = 'Change shipped from box';
+    btn.style.cssText = 'opacity:.45;font-size:11px;padding:0 3px;margin-left:5px;vertical-align:middle';
+    btn.textContent = '✏️';
+    btn.addEventListener('click', e => { e.stopPropagation(); _openInlineBoxSelector(cell.closest('tr')); });
+    cell.appendChild(span);
+    cell.appendChild(btn);
+  }
+
+  function _showBoxSelect(cell, options, selectedBox, disabled, placeholder, onChange) {
+    cell.innerHTML = '';
+    const select = document.createElement('select');
+    select.className = 'box-select';
+    select.style.cssText = 'max-width:190px;height:26px;font-size:12px;border:1.5px solid var(--primary);border-radius:4px;background:#fff;color:var(--txt-1);padding:0 4px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';outline:none;vertical-align:middle';
+    select.disabled = disabled;
+
+    if (!options.length) {
+      const opt = document.createElement('option');
+      opt.textContent = placeholder || '—';
+      select.appendChild(opt);
+    } else {
+      options.forEach(opt => {
+        const el = document.createElement('option');
+        el.value = opt.box_number;
+        el.textContent = `${opt.box_number}${opt.isOriginal ? ' • Original' : ''} • Qty ${opt.remaining_stock}`;
+        if (opt.box_number === selectedBox) el.selected = true;
+        select.appendChild(el);
+      });
+    }
+
+    cell.appendChild(select);
+
+    if (!disabled && onChange) {
+      select.addEventListener('change', () => onChange(select.value));
+      select.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation();
+          _restoreShippedCell(cell, cell.closest('tr')?.dataset.shipped || selectedBox);
+        }
+      });
+    }
   }
 
   async function _openInlineBoxSelector(tr) {
@@ -180,104 +223,64 @@ const Orders = (() => {
     const sku        = tr.dataset.sku;
     const parsed     = _parseSku(sku);
     const currentBox = tr.dataset.shipped || '';
+    const cell       = tr.querySelector('td.shipped-cell');
+    if (!cell) return;
 
-    // Toggle off if already open for this row
-    const existing = document.getElementById('inline-box-selector-row');
-    if (existing && existing.previousElementSibling === tr) {
-      _closeInlineSelector();
+    // Toggle off if already showing a select for this row
+    if (cell.querySelector('select.box-select')) {
+      _restoreShippedCell(cell, currentBox);
       return;
     }
-    _closeInlineSelector();
 
-    tr.classList.add('inline-edit-active');
-
-    const inlineRow = document.createElement('tr');
-    inlineRow.id = 'inline-box-selector-row';
-    inlineRow.innerHTML = `<td colspan="${ALL_COLS.length}" style="padding:0;border-top:none">
-      <div style="padding:10px 14px;background:var(--surface-2);border-bottom:2px solid var(--primary)">
-        <div style="font-size:11px;color:var(--txt-3);font-weight:700;letter-spacing:.04em;margin-bottom:8px">
-          SHIPPED FROM BOX — CLICK TO AUTO-SAVE
-          <button id="inline-box-close" style="float:right;background:none;border:none;cursor:pointer;color:var(--txt-4);font-size:14px;line-height:1;padding:0" title="Close">✕</button>
-        </div>
-        <div id="inline-box-cards" style="font-size:12px;color:var(--txt-4)">Loading alternatives…</div>
-      </div>
-    </td>`;
-    tr.after(inlineRow);
-
-    document.getElementById('inline-box-close')?.addEventListener('click', e => {
-      e.stopPropagation();
-      _closeInlineSelector();
+    // Close any other open selects
+    document.querySelectorAll('td.shipped-cell').forEach(c => {
+      if (c !== cell && c.querySelector('select.box-select')) {
+        _restoreShippedCell(c, c.closest('tr')?.dataset.shipped || '');
+      }
     });
 
-    const cardsWrap = document.getElementById('inline-box-cards');
-
     if (!parsed) {
-      cardsWrap.innerHTML = `<span style="color:var(--txt-4)">SKU structure not recognized — cannot look up alternative boxes</span>`;
+      _showBoxSelect(cell, [], '', true, 'Invalid SKU');
       return;
     }
+
+    _showBoxSelect(cell, [], '', true, 'Loading…');
 
     try {
       const result = await API.getInventoryAlternatives(sku);
       const { originalBox, inStock } = result || {};
 
       if (!inStock?.length) {
-        cardsWrap.innerHTML = `<span style="color:var(--txt-4)">No alternative boxes in stock for this SKU</span>`;
+        _showBoxSelect(cell, [], '', true, 'No alternatives');
         return;
       }
 
-      const allOptions = inStock.map(a => ({
-        ...a,
-        isOriginal: a.box_number === originalBox,
+      const options = inStock.map(a => ({
+        ...a, isOriginal: a.box_number === originalBox,
       })).sort((a, b) => {
         if (a.isOriginal && !b.isOriginal) return -1;
         if (!a.isOriginal && b.isOriginal) return 1;
         return b.remaining_stock - a.remaining_stock;
       });
 
-      cardsWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
-      cardsWrap.innerHTML = allOptions.map(opt => {
-        const isSelected = opt.box_number === currentBox;
-        const border = isSelected
-          ? '2px solid var(--primary)'
-          : (opt.isOriginal ? '2px solid #fbbf24' : '2px solid var(--border)');
-        const bg = opt.isOriginal ? 'rgba(251,191,36,.08)' : '#fff';
-        const shadow = isSelected ? 'box-shadow:0 0 0 3px rgba(37,99,235,.12);' : '';
-        return `
-          <div class="inline-box-opt" data-box="${Utils.escapeHtml(opt.box_number)}"
-            style="border:${border};border-radius:8px;padding:8px 12px;cursor:pointer;background:${bg};
-                   transition:border-color .15s,box-shadow .15s;min-width:130px;${shadow}">
-            <div style="font-size:11px;color:var(--txt-4);font-weight:600;margin-bottom:2px">
-              ${opt.isOriginal ? '📦 Original' : '📫 Alternative'}${isSelected ? ' <span style="color:var(--primary)">✓</span>' : ''}
-            </div>
-            <div style="font-weight:700;font-size:13px;color:var(--txt-1)">${Utils.escapeHtml(opt.box_number)}</div>
-            <div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${Utils.formatNumber(opt.remaining_stock)} in stock</div>
-          </div>`;
-      }).join('');
-
-      cardsWrap.querySelectorAll('.inline-box-opt').forEach(el => {
-        el.addEventListener('click', async () => {
-          const selectedBox = el.dataset.box;
-          el.style.opacity = '0.6';
-          try {
-            await API.updateOrder(rowId, {
-              order_date:       tr.dataset.orderDate,
-              quantity_sold:    parseInt(tr.dataset.qty, 10),
-              platform:         tr.dataset.platform,
-              shipped_from_box: selectedBox,
-            });
-            const shippedCell = tr.querySelector('td.shipped-cell');
-            if (shippedCell) shippedCell.firstChild.textContent = selectedBox;
-            tr.dataset.shipped = selectedBox;
-            Notify.success('Saved', `Shipped from box updated to ${selectedBox}`);
-            _closeInlineSelector();
-          } catch (err) {
-            Notify.apiError(err);
-            el.style.opacity = '1';
-          }
-        });
+      _showBoxSelect(cell, options, currentBox || originalBox, false, null, async selectedBox => {
+        _restoreShippedCell(cell, selectedBox);
+        try {
+          await API.updateOrder(rowId, {
+            order_date:       tr.dataset.orderDate,
+            quantity_sold:    parseInt(tr.dataset.qty, 10),
+            platform:         tr.dataset.platform,
+            shipped_from_box: selectedBox,
+          });
+          tr.dataset.shipped = selectedBox;
+          Notify.success('Saved', `Shipped from box → ${selectedBox}`);
+        } catch (err) {
+          Notify.apiError(err);
+          _restoreShippedCell(cell, currentBox);
+        }
       });
     } catch {
-      cardsWrap.innerHTML = `<span style="color:var(--txt-4)">Failed to load alternatives</span>`;
+      _showBoxSelect(cell, [], '', true, 'Load failed');
     }
   }
 
@@ -491,6 +494,7 @@ const Orders = (() => {
     const applyBtn     = document.getElementById('orders-apply-filters');
     const resetBtn     = document.getElementById('orders-reset-filters');
     const exportBtn    = document.getElementById('orders-export');
+    const uploadBtn    = document.getElementById('orders-upload-btn');
     const searchEl     = document.getElementById('orders-search');
     const selectAll    = document.getElementById('orders-select-all');
     const deleteSelBtn = document.getElementById('orders-delete-selected');
@@ -499,6 +503,7 @@ const Orders = (() => {
     if (applyBtn)     applyBtn.addEventListener('click',     () => { _collectFilters(); _page = 1; load(); });
     if (resetBtn)     resetBtn.addEventListener('click',     _resetFilters);
     if (exportBtn)    exportBtn.addEventListener('click',    _openExportModal);
+    if (uploadBtn)    uploadBtn.addEventListener('click',    () => Uploads.openModal('orders'));
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
     if (phantomCb)    phantomCb.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
 
@@ -521,18 +526,6 @@ const Orders = (() => {
 
     _initSortHeaders();
     _updateDeleteBtn();
-
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') _closeInlineSelector();
-    });
-    document.addEventListener('click', e => {
-      const sel = document.getElementById('inline-box-selector-row');
-      if (!sel) return;
-      const active = document.querySelector('tr.inline-edit-active');
-      if (active && !active.contains(e.target) && !sel.contains(e.target)) {
-        _closeInlineSelector();
-      }
-    });
   }
 
   return { init, load, clearSelection, setPhantomFilter };

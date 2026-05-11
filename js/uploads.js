@@ -297,5 +297,50 @@ const Uploads = (() => {
     if (refreshBtn) refreshBtn.addEventListener('click', () => loadHistory());
   }
 
-  return { init, loadHistory, downloadFailedRows };
+  /* ── Upload modal (called from other pages) ─────────────── */
+  function openModal(fileType) {
+    const label = fileType === 'inventory' ? 'Inventory' : 'Orders';
+    const zoneId  = `drop-zone-modal-${fileType}`;
+    const inputId = `file-input-modal-${fileType}`;
+    const btnId   = `upload-modal-btn-${fileType}`;
+
+    const m = new Modal({
+      title:    `📤 Upload ${label} Report`,
+      maxWidth: '460px',
+      body: `
+        <div class="drop-zone" id="${zoneId}" style="margin-bottom:12px">
+          <input type="file" id="${inputId}" accept=".txt">
+          <div class="drop-icon">${fileType === 'inventory' ? '📦' : '📋'}</div>
+          <div class="drop-text">Drop .txt file here or click to browse</div>
+          <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) · Max 10 MB / 100,000 rows</div>
+          <div class="drop-file" style="display:none"></div>
+        </div>
+        <div class="progress-wrap" id="progress-modal-${fileType}" style="display:none"><div class="progress-bar"></div></div>
+        <div id="upload-status-modal-${fileType}"></div>`,
+      footer: `
+        <button class="btn btn-secondary btn-sm" data-action="clear">Clear</button>
+        <button class="btn btn-primary btn-sm" id="${btnId}" disabled>Upload</button>`,
+    });
+    m.show();
+
+    const zone = _initDropZone(zoneId, inputId, fileType);
+
+    m.footerEl.addEventListener('click', async e => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (action === 'clear') { zone?.clearFile(); return; }
+    });
+
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      btn.disabled = true;
+      btn.addEventListener('click', async () => {
+        const file = zone?.getFile();
+        if (!file) return;
+        await _doUpload(file, fileType, btn, zoneId);
+        zone?.clearFile({ keepStatus: true });
+      });
+    }
+  }
+
+  return { init, loadHistory, downloadFailedRows, openModal };
 })();

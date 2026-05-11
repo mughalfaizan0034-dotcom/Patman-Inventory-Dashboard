@@ -184,7 +184,7 @@ const InventoryList = (() => {
   let _selectedSkus  = new Set();
   let _sortBy        = 'date_added';
   let _sortDir       = 'desc';
-  let _undefinedOnly = false;
+  let _statusFilter  = 'all';
 
   const COLS = ['', 'SKU', 'Box #', 'Part #', 'UPC', 'Qty', 'Sold', 'Remaining', 'Date Added', 'Notes', ''];
 
@@ -357,7 +357,7 @@ const InventoryList = (() => {
           </div>
           <div>
             <label style="font-size:12px;color:var(--txt-3);font-weight:600;display:block;margin-bottom:4px">DATE ADDED</label>
-            <input class="form-input" id="inv-edit-date" type="date" value="${Utils.escapeHtml(tr.dataset.date)}">
+            <input class="form-input" id="inv-edit-date" type="date" value="${Utils.toDateInputValue(tr.dataset.date)}">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -444,15 +444,45 @@ const InventoryList = (() => {
   }
 
   /* ── Set filter programmatically (from dashboard KPI clicks) */
-  function setUndefinedFilter() {
-    _undefinedOnly = true;
+  function setStatusFilter(status) {
+    _statusFilter = status || 'all';
     _page = 1;
     _search = '';
     const searchEl = document.getElementById('inventory-search');
     if (searchEl) searchEl.value = '';
-    const cb = document.getElementById('filter-undefined-only');
-    if (cb) cb.checked = true;
+    const sel = document.getElementById('filter-inventory-status');
+    if (sel) sel.value = _statusFilter;
     load();
+  }
+
+  /* ── Export ──────────────────────────────────────────────── */
+  async function _doExportInventory() {
+    const isFiltered = _search || _statusFilter !== 'all';
+    try {
+      const data = await API.getInventoryList(1, 5000, _search, {
+        sort_by:  _sortBy,
+        sort_dir: _sortDir,
+        status:   _statusFilter,
+      });
+      const rows = data.items || data.rows || [];
+      const header = 'SKU,Box #,Part #,UPC,Initial Qty,Units Sold,Remaining,Date Added,Notes';
+      const lines  = rows.map(r => [
+        r.sku || '', r.box_number || '', r.part_number || '', r.upc || '',
+        r.quantity ?? '', r.units_sold ?? '',
+        (Number(r.quantity ?? 0) - Number(r.units_sold ?? 0)),
+        r.date_added || '', r.notes || '',
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      const csv  = [header, ...lines].join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `inventory_${isFiltered ? 'filtered_' : ''}export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      Notify.apiError(err);
+    }
   }
 
   /* ── Load ────────────────────────────────────────────────── */
@@ -466,11 +496,7 @@ const InventoryList = (() => {
     const ps = CONFIG.getPageSize();
 
     try {
-      const options = {
-        sort_by:        _sortBy,
-        sort_dir:       _sortDir,
-        ...(  _undefinedOnly ? { undefined_only: true } : {}),
-      };
+      const options = { sort_by: _sortBy, sort_dir: _sortDir, status: _statusFilter };
       const data = await API.getInventoryList(_page, ps, _search, options);
       _renderTable(data.items || data.rows || [], data.total || 0);
     } catch (err) {
@@ -482,13 +508,14 @@ const InventoryList = (() => {
   }
 
   function init() {
-    const searchInput   = document.getElementById('inventory-search');
-    const searchBtn     = document.getElementById('inventory-search-btn');
-    const selectAll     = document.getElementById('inv-select-all');
-    const deleteSelBtn  = document.getElementById('inv-delete-selected');
-    const undefOnlyCb   = document.getElementById('filter-undefined-only');
+    const searchInput  = document.getElementById('inventory-search');
+    const searchBtn    = document.getElementById('inventory-search-btn');
+    const statusSel    = document.getElementById('filter-inventory-status');
+    const selectAll    = document.getElementById('inv-select-all');
+    const deleteSelBtn = document.getElementById('inv-delete-selected');
+    const exportBtn    = document.getElementById('inventory-export-btn');
+    const uploadBtn    = document.getElementById('inventory-upload-btn');
 
-    // Button-triggered search only (no debounce auto-search)
     if (searchInput) {
       searchInput.addEventListener('keydown', e => {
         if (e.key === 'Enter') { _search = e.target.value.trim(); _page = 1; load(); }
@@ -502,9 +529,9 @@ const InventoryList = (() => {
       });
     }
 
-    if (undefOnlyCb) {
-      undefOnlyCb.addEventListener('change', () => {
-        _undefinedOnly = undefOnlyCb.checked;
+    if (statusSel) {
+      statusSel.addEventListener('change', () => {
+        _statusFilter = statusSel.value;
         _page = 1;
         load();
       });
@@ -522,11 +549,13 @@ const InventoryList = (() => {
     }
 
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
+    if (exportBtn)    exportBtn.addEventListener('click', _doExportInventory);
+    if (uploadBtn)    uploadBtn.addEventListener('click', () => Uploads.openModal('inventory'));
 
     _initSortHeaders();
   }
 
-  return { init, load, setUndefinedFilter };
+  return { init, load, setUndefinedFilter: () => setStatusFilter('undefined_only'), setStatusFilter };
 })();
 
 /* ── Pagination helper ──────────────────────────────────────── */
