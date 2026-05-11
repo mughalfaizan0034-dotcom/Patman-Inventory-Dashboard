@@ -151,43 +151,30 @@ const Auth = (() => {
     const token = getToken();
     if (!token) return false;
 
-    if (CONFIG.CLOUD_RUN_URL) {
-      const expMs = _tokenExpiresAt(token);
-      const now   = Date.now();
+    const expMs = _tokenExpiresAt(token);
+    const now   = Date.now();
 
-      if (expMs && now >= expMs) {
-        // Token fully expired — must refresh or fail
-        const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
-        if (!storedRefresh) { clearSession(); return false; }
+    if (expMs && now >= expMs) {
+      // Token fully expired — must refresh or fail
+      const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
+      if (!storedRefresh) { clearSession(); return false; }
+      try {
+        const data = await API.refreshToken(storedRefresh);
+        saveSession(data.access_token, getUser());
+      } catch { clearSession(); return false; }
+    } else if (expMs && expMs - now < 2 * 60 * 1000) {
+      // Proactively refresh within 2 min of expiry (best-effort)
+      const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
+      if (storedRefresh) {
         try {
           const data = await API.refreshToken(storedRefresh);
           saveSession(data.access_token, getUser());
-        } catch { clearSession(); return false; }
-      } else if (expMs && expMs - now < 2 * 60 * 1000) {
-        // Proactively refresh within 2 min of expiry (best-effort)
-        const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
-        if (storedRefresh) {
-          try {
-            const data = await API.refreshToken(storedRefresh);
-            saveSession(data.access_token, getUser());
-          } catch { /* keep current token; it's still valid */ }
-        }
+        } catch { /* keep current token; it's still valid */ }
       }
-
-      const user = getUser();
-      if (user) return true;
-      clearSession();
-      return false;
     }
 
-    // Apps Script path
-    try {
-      const result = await API.verifySession();
-      if (result && result.user) {
-        saveSession(getToken(), result.user);
-        return true;
-      }
-    } catch { /* token invalid or expired */ }
+    const user = getUser();
+    if (user) return true;
     clearSession();
     return false;
   }

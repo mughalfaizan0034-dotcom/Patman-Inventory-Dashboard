@@ -216,21 +216,17 @@ const API = (() => {
   /* ── Public API methods ─────────────────────────────────── */
   return {
 
-    /* Auth — Cloud Run only when configured; Apps Script fallback for dev only */
+    /* Auth — Cloud Run only. Fails closed if CLOUD_RUN_URL is not configured. */
     async login(username, password) {
-      if (CONFIG.CLOUD_RUN_URL) {
-        const data = await _crPostRaw('/auth/login', { username, password }, 0);
-        return { token: data.access_token, refresh_token: data.refresh_token, user: data.user };
+      if (!CONFIG.CLOUD_RUN_URL) {
+        throw new Error('Authentication service not configured. Contact your administrator.');
       }
-      // Apps Script legacy — development only, no org-aware auth
-      return _get('login', { email: username, password }, 0);
+      const data = await _crPostRaw('/auth/login', { username, password }, 0);
+      return { token: data.access_token, refresh_token: data.refresh_token, user: data.user };
     },
 
     async logout() {
-      // JWT is stateless; Apps Script session invalidation is irrelevant when Cloud Run is active
-      if (!CONFIG.CLOUD_RUN_URL) {
-        try { await _get('logout', {}, 0); } catch { /* best-effort */ }
-      }
+      // JWT is stateless — nothing to revoke server-side until token revocation is implemented.
       sessionStorage.removeItem(CONFIG.SESSION_KEY);
       sessionStorage.removeItem(CONFIG.USER_KEY);
       sessionStorage.removeItem('patman_refresh_token');
@@ -241,14 +237,11 @@ const API = (() => {
     },
 
     async verifySession() {
-      if (CONFIG.CLOUD_RUN_URL) {
-        // JWT is stateless — session is valid if the token decodes and the user is in storage.
-        // Actual expiry is enforced by checkSession() via _tokenExpiresAt().
-        const user = JSON.parse(sessionStorage.getItem(CONFIG.USER_KEY) || 'null');
-        if (user) return { user };
-        throw new Error('No session');
-      }
-      return _get('verifySession', {}, 0);
+      // JWT sessions are validated locally — no round-trip needed.
+      // Expiry enforcement is handled by checkSession() via _tokenExpiresAt().
+      const user = JSON.parse(sessionStorage.getItem(CONFIG.USER_KEY) || 'null');
+      if (user) return { user };
+      throw new Error('No session');
     },
 
     /* Dashboard */
