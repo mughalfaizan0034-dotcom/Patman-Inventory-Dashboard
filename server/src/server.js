@@ -84,6 +84,22 @@ export async function buildApp() {
     return reply.code(statusCode).send(body);
   });
 
+  // ── Fingerprint route — registered before ALL plugins and after() blocks.
+  // If this 404s, the container image itself is wrong (not a code bug).
+  const BUILD_TS  = new Date().toISOString();
+  const BUILD_TAG = 'memberships-v2-uploads-pipeline';
+  console.log(`[BOOT] buildApp() started  build=${BUILD_TAG}  ts=${BUILD_TS}`);
+
+  fastify.get('/debug/version', async (_req, reply) => {
+    return reply.send({
+      build_tag:   BUILD_TAG,
+      build_ts:    BUILD_TS,
+      jwt_version: 'memberships-v2',
+      node_env:    env.NODE_ENV,
+      project_id:  env.GCP_PROJECT_ID,
+    });
+  });
+
   fastify.register(helmet, { global: true });
   fastify.register(cors, {
     origin:  env.CORS_ORIGIN,
@@ -96,10 +112,6 @@ export async function buildApp() {
   });
   fastify.register(sensible);
   fastify.register(bigqueryPlugin);
-
-  // Build fingerprint — proof of which source revision is running.
-  const BUILD_TS  = new Date().toISOString();
-  const BUILD_TAG = 'memberships-v2-uploads-pipeline';
 
   fastify.after(() => {
     // console.log goes straight to Cloud Run stdout, bypasses pino formatting.
@@ -138,15 +150,6 @@ export async function buildApp() {
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
     fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo });
     console.log('[BOOT] all route plugins registered');
-
-    // Always-on debug endpoints — removed after deployment is verified.
-    fastify.get('/debug/version', async () => ({
-      build_tag:   BUILD_TAG,
-      build_ts:    BUILD_TS,
-      jwt_version: 'memberships-v2',
-      node_env:    env.NODE_ENV,
-      project_id:  env.GCP_PROJECT_ID,
-    }));
 
     if (process.env.DEBUG_ROUTES === 'true') {
       fastify.get('/debug/routes', async () => ({ routes: fastify.printRoutes({ commonPrefix: false }) }));
