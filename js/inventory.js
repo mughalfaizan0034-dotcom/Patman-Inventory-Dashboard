@@ -259,8 +259,10 @@ const InventoryList = (() => {
       const remColor  = remaining < 0 ? 'color:var(--error);font-weight:700' : remaining === 0 ? 'color:var(--txt-4)' : 'color:var(--success);font-weight:600';
 
       const isUndef    = _isUndefined(item.sku) || _isUndefined(item.upc) || _isUndefined(item.part_number);
-      const undefBadge = isUndef ? ` <span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
-      const rowBg      = isUndef ? ' style="background:rgba(220,38,38,.04)"' : '';
+      const isOversold = remaining < 0;
+      const undefBadge    = isUndef    ? ` <span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
+      const oversoldBadge = isOversold ? ` <span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">PHANTOM</span>` : '';
+      const rowBg      = isUndef ? ' style="background:rgba(220,38,38,.04)"' : isOversold ? ' style="background:rgba(234,88,12,.04)"' : '';
 
       return `<tr data-sku="${Utils.escapeHtml(item.sku || '')}"
                   data-upc="${Utils.escapeHtml(item.upc || '')}"
@@ -272,7 +274,7 @@ const InventoryList = (() => {
         <td style="width:36px;text-align:center;padding:0 4px">
           <input type="checkbox" class="inv-row-cb" data-sku="${Utils.escapeHtml(item.sku || '')}"${checked} style="cursor:pointer">
         </td>
-        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}</td>
+        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}${oversoldBadge}</td>
         <td>${Utils.escapeHtml(item.box_number || '—')}</td>
         <td>${Utils.escapeHtml(item.part_number || '—')}</td>
         <td>${Utils.escapeHtml(item.upc || '—')}</td>
@@ -462,7 +464,7 @@ const InventoryList = (() => {
       const data = await API.getInventoryList(1, 5000, _search, {
         sort_by:  _sortBy,
         sort_dir: _sortDir,
-        status:   _statusFilter,
+        filter:   _statusFilter,
       });
       const rows = data.items || data.rows || [];
       const header = 'SKU,Box #,Part #,UPC,Initial Qty,Units Sold,Remaining,Date Added,Notes';
@@ -496,7 +498,7 @@ const InventoryList = (() => {
     const ps = CONFIG.getPageSize();
 
     try {
-      const options = { sort_by: _sortBy, sort_dir: _sortDir, status: _statusFilter };
+      const options = { sort_by: _sortBy, sort_dir: _sortDir, filter: _statusFilter };
       const data = await API.getInventoryList(_page, ps, _search, options);
       _renderTable(data.items || data.rows || [], data.total || 0);
     } catch (err) {
@@ -533,7 +535,6 @@ const InventoryList = (() => {
       statusSel.addEventListener('change', () => {
         _statusFilter = statusSel.value;
         _page = 1;
-        load();
       });
     }
 
@@ -555,7 +556,7 @@ const InventoryList = (() => {
     _initSortHeaders();
   }
 
-  return { init, load, setUndefinedFilter: () => setStatusFilter('undefined_only'), setStatusFilter };
+  return { init, load, setUndefinedFilter: () => setStatusFilter('undefined'), setStatusFilter };
 })();
 
 /* ── Pagination helper ──────────────────────────────────────── */

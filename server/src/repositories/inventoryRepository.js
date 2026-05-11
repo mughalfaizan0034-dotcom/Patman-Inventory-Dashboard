@@ -4,7 +4,7 @@ export function createInventoryRepository({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
   const ordTable = `\`${projectId}.${TABLES.ORDERS}\``;
 
-  async function findAll({ organizationId, page, pageSize, search, sortBy, sortDir, status = 'all' }) {
+  async function findAll({ organizationId, page, pageSize, search, sortBy, sortDir, filter = 'all' }) {
     const offset = (page - 1) * pageSize;
 
     const conditions = ['i.organization_id = @organizationId'];
@@ -15,7 +15,7 @@ export function createInventoryRepository({ bq, projectId }) {
       params.search = search.toLowerCase();
     }
 
-    if (status === 'undefined_only') {
+    if (filter === 'undefined') {
       conditions.push(`(
         UPPER(TRIM(COALESCE(i.sku, '')))           IN ('NA','N/A','')
         OR UPPER(TRIM(COALESCE(i.upc, '')))        IN ('NA','N/A','')
@@ -40,9 +40,9 @@ export function createInventoryRepository({ bq, projectId }) {
     const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
     // Stock-based filters require joining orders to compute remaining_stock
-    const needsStockFilter = status === 'in_stock' || status === 'out_of_stock';
+    const needsStockFilter = filter === 'in-stock' || filter === 'oos';
     const stockCond = needsStockFilter
-      ? `AND (i.quantity - COALESCE(o.units_sold, 0)) ${status === 'in_stock' ? '> 0' : '<= 0'}`
+      ? `AND (i.quantity - COALESCE(o.units_sold, 0)) ${filter === 'in-stock' ? '> 0' : '<= 0'}`
       : '';
 
     const cte = `
