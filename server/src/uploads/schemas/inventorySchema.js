@@ -1,4 +1,4 @@
-import { safeString, parsePositiveInt } from '../core/rowNormalizer.js';
+import { safeString, parsePositiveInt, normalizeDate } from '../core/rowNormalizer.js';
 
 export const inventorySchema = {
   required: ['sku', 'upc', 'quantity'],
@@ -14,10 +14,9 @@ export const inventorySchema = {
     const qty = parsePositiveInt(raw.quantity, 'quantity', lineNum);
     if (qty.error) return { error: qty.error };
 
-    const dateAdded = safeString(raw.date_added) || null;
-    if (dateAdded && isNaN(new Date(dateAdded).getTime())) {
-      return { error: { row: lineNum, field: 'date_added', value: raw.date_added, reason: 'date_added has an invalid format (expected YYYY-MM-DD)' } };
-    }
+    // date_added is optional — normalize if present, store null if blank or unparseable.
+    // Never reject the row for a date format issue.
+    const dateAdded = normalizeDate(raw.date_added);
 
     return {
       row: {

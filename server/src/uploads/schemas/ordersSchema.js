@@ -1,17 +1,16 @@
-import { safeString, parsePositiveInt } from '../core/rowNormalizer.js';
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+import { safeString, parsePositiveInt, normalizeDate } from '../core/rowNormalizer.js';
 
 export const ordersSchema = {
   required: ['order_date', 'sku', 'quantity_sold', 'shipped_from_box', 'platform'],
 
   buildRow(raw, organizationId, lineNum) {
-    const orderDate = safeString(raw.order_date);
-    if (!orderDate) {
+    if (!raw.order_date?.trim()) {
       return { error: { row: lineNum, field: 'order_date', value: raw.order_date, reason: 'order_date is required' } };
     }
-    if (!ISO_DATE_RE.test(orderDate) || isNaN(new Date(orderDate).getTime())) {
-      return { error: { row: lineNum, field: 'order_date', value: raw.order_date, reason: 'order_date must be a valid date in YYYY-MM-DD format' } };
+    // Normalize from any common format (M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, Excel serial, etc.)
+    const orderDate = normalizeDate(raw.order_date);
+    if (!orderDate) {
+      return { error: { row: lineNum, field: 'order_date', value: raw.order_date, reason: 'order_date could not be parsed — accepted formats: YYYY-MM-DD, M/D/YYYY, MM/DD/YYYY' } };
     }
 
     if (!raw.sku?.trim()) {
