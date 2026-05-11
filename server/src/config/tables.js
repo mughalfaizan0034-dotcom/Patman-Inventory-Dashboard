@@ -1,7 +1,3 @@
-// Logical dataset groupings.
-// All point to the single 'patman_inventory' dataset during the Apps Script
-// transition.  When Phase 6 splits BigQuery into real datasets (core / logs /
-// staging / analytics), only DATASETS values need updating here.
 export const DATASETS = {
   CORE:      'patman_inventory',
   LOGS:      'patman_inventory',
@@ -9,10 +5,9 @@ export const DATASETS = {
   ANALYTICS: 'patman_inventory',
 };
 
-// Fully-qualified dataset.table strings.
-// Usage: `${GCP_PROJECT_ID}.${TABLES.INVENTORY}` → 'patman-inventory.patman_inventory.inventory'
 export const TABLES = {
   ORGANIZATIONS:     `${DATASETS.CORE}.organizations`,
+  MEMBERSHIPS:       `${DATASETS.CORE}.memberships`,
   INVENTORY:         `${DATASETS.CORE}.inventory`,
   ORDERS:            `${DATASETS.CORE}.orders`,
   USERS:             `${DATASETS.CORE}.users`,

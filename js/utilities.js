@@ -10,11 +10,13 @@ var CLOUD_RUN_URL = 'https://patman-inventory-api-znfextdp4q-uc.a.run.app';
 
 var CONFIG = {
   CLOUD_RUN_URL,
-  SESSION_KEY: 'patman_token',
-  USER_KEY:    'patman_user',
-  TIMEOUT_MS:  30000,
-  MAX_RETRIES: 2,
-  PAGE_SIZE:   50,
+  SESSION_KEY:      'patman_token',
+  USER_KEY:         'patman_user',
+  ORG_KEY:          'patman_org',
+  MEMBERSHIPS_KEY:  'patman_memberships',
+  TIMEOUT_MS:       30000,
+  MAX_RETRIES:      2,
+  PAGE_SIZE:        50,
 };
 
 /* ── Utils ──────────────────────────────────────────────────── */

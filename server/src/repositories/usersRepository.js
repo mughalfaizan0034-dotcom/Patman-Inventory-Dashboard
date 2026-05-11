@@ -3,25 +3,12 @@ import { TABLES } from '../config/tables.js';
 export function createUsersRepository({ bq, projectId }) {
   const table = `\`${projectId}.${TABLES.USERS}\``;
 
-  async function findByUsername(organizationId, username) {
-    const query = `
-      SELECT user_id, organization_id, username, email, password_hash,
-             display_name, role, is_active
-      FROM ${table}
-      WHERE organization_id = @organizationId
-        AND username = @username
-      LIMIT 1
-    `;
-    const [rows] = await bq.query({ query, params: { organizationId, username } });
-    return rows[0] ?? null;
-  }
-
+  // Global lookup — usernames are unique across the platform.
   async function findByUsernameGlobal(username) {
     const query = `
-      SELECT user_id, organization_id, username, email, password_hash,
-             display_name, role, is_active
+      SELECT user_id, username, email, password_hash, display_name, is_active
       FROM ${table}
-      WHERE username = @username
+      WHERE username  = @username
         AND is_active = TRUE
       LIMIT 1
     `;
@@ -31,8 +18,7 @@ export function createUsersRepository({ bq, projectId }) {
 
   async function findById(userId) {
     const query = `
-      SELECT user_id, organization_id, username, email, password_hash,
-             display_name, role, is_active
+      SELECT user_id, username, email, password_hash, display_name, is_active
       FROM ${table}
       WHERE user_id = @userId
       LIMIT 1
@@ -41,44 +27,29 @@ export function createUsersRepository({ bq, projectId }) {
     return rows[0] ?? null;
   }
 
-  async function findByEmail(organizationId, email) {
+  async function findAll() {
     const query = `
-      SELECT user_id, organization_id, username, email, password_hash,
-             display_name, role, is_active
+      SELECT user_id, username, email, display_name, is_active, created_at
       FROM ${table}
-      WHERE organization_id = @organizationId
-        AND email = @email
-      LIMIT 1
-    `;
-    const [rows] = await bq.query({ query, params: { organizationId, email } });
-    return rows[0] ?? null;
-  }
-
-  async function findAllByOrg(organizationId) {
-    const query = `
-      SELECT user_id, organization_id, username, email, display_name, role, is_active
-      FROM ${table}
-      WHERE organization_id = @organizationId
       ORDER BY display_name
     `;
-    const [rows] = await bq.query({ query, params: { organizationId } });
+    const [rows] = await bq.query({ query });
     return rows;
   }
 
   async function insert(user) {
     const query = `
       INSERT INTO ${table}
-        (user_id, organization_id, username, email, display_name, password_hash,
-         role, is_active, created_at, updated_at)
+        (user_id, username, email, display_name, password_hash, is_active, created_at, updated_at)
       VALUES
-        (@user_id, @organization_id, @username, @email, @display_name, @password_hash,
-         @role, @is_active, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+        (@user_id, @username, @email, @display_name, @password_hash,
+         @is_active, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
     `;
     await bq.query({ query, params: user });
   }
 
   async function update(userId, updates) {
-    const allowed = ['display_name', 'role', 'is_active'];
+    const allowed    = ['display_name', 'is_active'];
     const setClauses = Object.keys(updates)
       .filter(k => allowed.includes(k))
       .map(k => `${k} = @${k}`);
@@ -100,8 +71,5 @@ export function createUsersRepository({ bq, projectId }) {
     await bq.query({ query, params: { passwordHash, userId } });
   }
 
-  return {
-    findByUsername, findByUsernameGlobal, findById, findByEmail,
-    findAllByOrg, insert, update, updatePasswordHash,
-  };
+  return { findByUsernameGlobal, findById, findAll, insert, update, updatePasswordHash };
 }

@@ -11,9 +11,9 @@ const Settings = (() => {
   let _editingUserId = null;
 
   function _openUserModal(user = null) {
-    _editingUserId = user?.user_id || null;
+    _editingUserId = user?.membership_id || user?.user_id || null;
     const isEdit   = !!user;
-    const title    = isEdit ? 'Edit User' : 'Add User';
+    const title    = isEdit ? 'Edit Member' : 'Add User';
 
     if (!_userModal) {
       _userModal = new Modal({ title, maxWidth: '440px' });
@@ -25,11 +25,11 @@ const Settings = (() => {
           <label class="form-label">Display Name <span class="req">*</span></label>
           <input class="form-input" id="u-name" placeholder="Full name" value="${Utils.escapeHtml(user?.display_name || '')}">
         </div>
-        <div class="form-group">
-          <label class="form-label">Email <span class="req">*</span></label>
-          <input class="form-input" id="u-email" type="email" placeholder="email@domain.com" value="${Utils.escapeHtml(user?.email || '')}" ${isEdit ? 'readonly' : ''}>
-        </div>
         ${!isEdit ? `
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input class="form-input" id="u-username" placeholder="auto-generated if blank" autocomplete="off">
+        </div>
         <div class="form-group">
           <label class="form-label">Password <span class="req">*</span></label>
           <input class="form-input" id="u-password" type="password" placeholder="Minimum 8 characters">
@@ -38,6 +38,7 @@ const Settings = (() => {
           <label class="form-label">Role</label>
           <select class="form-select" id="u-role">
             <option value="viewer"  ${user?.role === 'viewer'  ? 'selected' : ''}>Viewer</option>
+            <option value="staff"   ${user?.role === 'staff'   ? 'selected' : ''}>Staff</option>
             <option value="manager" ${user?.role === 'manager' ? 'selected' : ''}>Manager</option>
             <option value="admin"   ${user?.role === 'admin'   ? 'selected' : ''}>Admin</option>
           </select>
@@ -64,7 +65,7 @@ const Settings = (() => {
 
   async function _saveUser(isEdit) {
     const name     = document.getElementById('u-name')?.value.trim();
-    const email    = document.getElementById('u-email')?.value.trim();
+    const username = document.getElementById('u-username')?.value.trim();
     const password = document.getElementById('u-password')?.value;
     const role     = document.getElementById('u-role')?.value;
     const active   = document.getElementById('u-active')?.value;
@@ -73,8 +74,7 @@ const Settings = (() => {
 
     const showErr = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
 
-    if (!name)  return showErr('Display name is required.');
-    if (!email) return showErr('Email is required.');
+    if (!name) return showErr('Display name is required.');
     if (!isEdit && (!password || password.length < 8)) return showErr('Password must be at least 8 characters.');
 
     if (errEl) errEl.style.display = 'none';
@@ -82,11 +82,11 @@ const Settings = (() => {
 
     try {
       if (isEdit) {
-        const updates = { display_name: name, role, is_active: active === 'true' };
+        const updates = { role, is_active: active === 'true' };
         await API.updateUser(_editingUserId, updates);
-        Notify.success('User updated');
+        Notify.success('Member updated');
       } else {
-        await API.createUser({ display_name: name, email, password, role });
+        await API.createUser({ display_name: name, username: username || undefined, password, role });
         Notify.success('User created');
       }
       _userModal.hide();
@@ -122,13 +122,13 @@ const Settings = (() => {
               <span style="font-weight:500">${Utils.escapeHtml(u.display_name || '—')}</span>
             </div>
           </td>
-          <td>${Utils.escapeHtml(u.email || u.username || '—')}</td>
+          <td>${Utils.escapeHtml(u.username || '—')}</td>
           <td>${Utils.badgeHtml(u.role === 'admin' ? 'error' : u.role === 'manager' ? 'warning' : 'gray', Utils.capitalize(u.role))}</td>
           <td>${u.is_active !== false ? Utils.badgeHtml('success', 'Active') : Utils.badgeHtml('gray', 'Inactive')}</td>
           <td>
             <div style="display:flex;gap:4px">
-              <button class="btn btn-secondary btn-sm" onclick="Settings._edit('${Utils.escapeHtml(u.user_id)}')">Edit</button>
-              ${u.user_id !== currentUser?.user_id ? `<button class="btn btn-danger btn-sm" onclick="Settings._delete('${Utils.escapeHtml(u.user_id)}', '${Utils.escapeHtml(u.display_name || u.username || u.email)}')">Delete</button>` : ''}
+              <button class="btn btn-secondary btn-sm" onclick="Settings._edit('${Utils.escapeHtml(u.membership_id || u.user_id)}')">Edit</button>
+              ${u.membership_id !== Auth.getOrganization()?.membership_id ? `<button class="btn btn-danger btn-sm" onclick="Settings._delete('${Utils.escapeHtml(u.membership_id || u.user_id)}', '${Utils.escapeHtml(u.display_name || u.username)}')">Remove</button>` : ''}
             </div>
           </td>
         </tr>`).join('');
@@ -168,9 +168,8 @@ const Settings = (() => {
       const status = await API.getSystemStatus();
       el.innerHTML = `
         <div style="display:grid;gap:10px">
-          ${_statusRow('BigQuery', status.bqStatus, status.bqMessage)}
-          ${_statusRow('CacheService', status.cacheStatus, status.cacheMessage)}
-          ${_statusRow('Apps Script', status.appsScriptStatus || 'ok', 'Connected')}
+          ${_statusRow('Cloud Run API', 'ok', 'Connected')}
+          ${_statusRow('BigQuery', status.bqStatus || 'ok', status.bqMessage || 'Connected')}
           ${_statusRow('App Version', 'info', status.version || '—')}
           ${_statusRow('Last Check', 'info', Utils.formatDatetime(status.timestamp))}
         </div>`;
@@ -313,20 +312,67 @@ const App = (() => {
 
   function _bindSidebarUser() {
     const user = Auth.getUser();
+    const org  = Auth.getOrganization();
     if (!user) return;
-    Utils.setText('.sidebar-user-name', user.display_name || user.username || user.email);
-    Utils.setText('.sidebar-user-role', Utils.capitalize(user.role));
+    Utils.setText('.sidebar-user-name', user.display_name || user.username || '?');
+    Utils.setText('.sidebar-user-role', org ? Utils.capitalize(org.role) : '—');
     const av = document.querySelector('.sidebar-avatar');
-    if (av) av.textContent = (user.display_name || user.username || user.email || '?')[0].toUpperCase();
+    if (av) av.textContent = (user.display_name || user.username || '?')[0].toUpperCase();
+
+    // Org switcher
+    const memberships = Auth.getMemberships();
+    const switcherEl  = document.getElementById('org-switcher');
+    const orgNameEl   = document.getElementById('current-org-name');
+    if (orgNameEl) orgNameEl.textContent = org?.display_name || '—';
+    if (switcherEl) switcherEl.style.display = memberships.length > 1 ? '' : 'none';
+  }
+
+  function _bindOrgSwitcher() {
+    const switcher = document.getElementById('org-switcher');
+    const dropdown = document.getElementById('org-switcher-dropdown');
+    if (!switcher || !dropdown) return;
+
+    switcher.addEventListener('click', () => {
+      const memberships = Auth.getMemberships();
+      const currentOrg  = Auth.getOrganization();
+      dropdown.innerHTML = memberships.map(m => `
+        <div class="org-switch-item ${m.membership_id === currentOrg?.membership_id ? 'active' : ''}"
+             data-membership-id="${Utils.escapeHtml(m.membership_id)}"
+             style="padding:10px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:space-between;${m.membership_id === currentOrg?.membership_id ? 'background:var(--surface-2);font-weight:600' : ''}">
+          <span>${Utils.escapeHtml(m.display_name)}</span>
+          ${m.membership_id === currentOrg?.membership_id ? '<span style="color:var(--success)">✓</span>' : ''}
+        </div>`
+      ).join('');
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    });
+
+    dropdown.addEventListener('click', async e => {
+      const item = e.target.closest('[data-membership-id]');
+      if (!item) return;
+      dropdown.style.display = 'none';
+      const mid = item.dataset.membershipId;
+      if (mid !== Auth.getOrganization()?.membership_id) {
+        await Auth.switchOrg(mid);
+        _bindSidebarUser();
+      }
+    });
+
+    document.addEventListener('click', e => {
+      if (!switcher.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
   }
 
   function showApp() {
     document.getElementById('loading-screen')?.style.setProperty('display', 'none');
     document.getElementById('login-screen')?.style.setProperty('display', 'none');
+    document.getElementById('org-selector-screen')?.style.setProperty('display', 'none');
     const shell = document.getElementById('app-shell');
     if (shell) shell.style.display = 'flex';
 
     _bindSidebarUser();
+    _bindOrgSwitcher();
     Auth.applyRoleVisibility();
     Auth.startIdleWatch();
 
@@ -337,6 +383,7 @@ const App = (() => {
   function showLogin() {
     document.getElementById('loading-screen')?.style.setProperty('display', 'none');
     document.getElementById('app-shell')?.style.setProperty('display', 'none');
+    document.getElementById('org-selector-screen')?.style.setProperty('display', 'none');
     const login = document.getElementById('login-screen');
     if (login) login.style.display = 'flex';
   }

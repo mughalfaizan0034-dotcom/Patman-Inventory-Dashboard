@@ -25,6 +25,24 @@
     <div class="spin" style="margin-top:8px"></div>
   </div>
 
+  <!-- ── Org Selector Screen ──────────────────────────────────── -->
+  <div id="org-selector-screen" style="display:none">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-logo">P</div>
+        <div>
+          <div class="login-brand-name">Inventory Dashboard</div>
+          <div class="login-brand-sub" id="org-selector-user-name">—</div>
+        </div>
+      </div>
+      <h1 class="login-heading">Select Workspace</h1>
+      <p class="login-sub">You have access to multiple workspaces. Choose one to continue.</p>
+      <div id="org-list" style="margin-top:8px"></div>
+      <div id="org-selector-error" class="login-error" style="margin-top:8px"></div>
+      <button id="org-selector-back" class="btn btn-ghost btn-sm" style="margin-top:12px;width:100%">← Back to sign in</button>
+    </div>
+  </div>
+
   <!-- ── Login Screen ───────────────────────────────────────── -->
   <div id="login-screen" style="display:none">
     <div class="login-card">
@@ -118,6 +136,14 @@
       <header class="topbar">
         <div id="topbar-title" class="topbar-title">Dashboard</div>
         <div class="topbar-actions">
+          <!-- Org switcher — hidden when user has only one org -->
+          <div id="org-switcher" style="display:none;position:relative;cursor:pointer;user-select:none">
+            <div style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500;color:var(--txt-2);padding:4px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2)">
+              <span id="current-org-name">—</span>
+              <span style="font-size:10px;color:var(--txt-4)">▾</span>
+            </div>
+            <div id="org-switcher-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);min-width:180px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow-md);z-index:200;overflow:hidden"></div>
+          </div>
           <button class="btn btn-ghost btn-icon btn-sm" id="topbar-refresh-btn" title="Refresh">↻</button>
           <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--txt-4)">
             <span class="status-dot online"></span>
@@ -326,11 +352,17 @@
           <div class="section-header">
             <div>
               <div class="section-title">Upload Data</div>
-              <div class="section-sub">Import inventory and order CSV / Excel files</div>
+              <div class="section-sub">Import inventory and order data · UTF-8 tab-delimited TXT files only</div>
             </div>
           </div>
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:24px">
+
+            <!-- Upload instructions -->
+            <div style="grid-column:1/-1;background:var(--info-bg,#eff6ff);border:1px solid var(--info-bd,#bfdbfe);border-radius:var(--r-sm);padding:12px 16px;font-size:13px;color:var(--txt-2)">
+              <strong>How to prepare your file:</strong> Download the template → fill it in Excel or Google Sheets → <strong>File → Save As → Tab delimited Text (.txt) with UTF-8 encoding</strong> → upload the .txt file here.
+              <div style="margin-top:4px;color:var(--error,#dc2626);font-size:12px">⚠ Direct Excel/XLSX uploads are not supported. Export to UTF-8 tab-delimited TXT first to prevent UPC and SKU corruption.</div>
+            </div>
 
             <!-- Inventory upload -->
             <div class="upload-card">
@@ -339,13 +371,13 @@
                 <a href="#" class="btn btn-ghost btn-sm" data-download-template="inventory">Download template</a>
               </div>
               <div class="upload-card-desc">
-                Columns: sku, box_number, part_number, upc, quantity, date_added, notes
+                Required: sku, upc, quantity &nbsp;·&nbsp; Optional: part_number, box_number, date_added, notes
               </div>
               <div class="drop-zone" id="drop-zone-inventory">
-                <input type="file" id="file-input-inventory" accept=".csv,.xlsx,.xls">
+                <input type="file" id="file-input-inventory" accept=".txt">
                 <div class="drop-icon">📦</div>
-                <div class="drop-text">Drop file here or click to browse</div>
-                <div class="drop-sub">CSV, XLSX, XLS · Max 10 MB</div>
+                <div class="drop-text">Drop .txt file here or click to browse</div>
+                <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) · Max 10 MB / 100,000 rows</div>
                 <div class="drop-file" style="display:none"></div>
               </div>
               <div class="progress-wrap" id="progress-inventory" style="display:none">
@@ -365,13 +397,13 @@
                 <a href="#" class="btn btn-ghost btn-sm" data-download-template="orders">Download template</a>
               </div>
               <div class="upload-card-desc">
-                Columns: order_id, order_date, sku, upc, quantity_sold, platform, source_file, shipped_from_box
+                Required: order_id, order_date, sku, upc, quantity_sold, platform &nbsp;·&nbsp; Optional: source_file, shipped_from_box
               </div>
               <div class="drop-zone" id="drop-zone-orders">
-                <input type="file" id="file-input-orders" accept=".csv,.xlsx,.xls">
+                <input type="file" id="file-input-orders" accept=".txt">
                 <div class="drop-icon">📋</div>
-                <div class="drop-text">Drop file here or click to browse</div>
-                <div class="drop-sub">CSV, XLSX, XLS · Max 10 MB</div>
+                <div class="drop-text">Drop .txt file here or click to browse</div>
+                <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) · Max 10 MB / 100,000 rows</div>
                 <div class="drop-file" style="display:none"></div>
               </div>
               <div class="progress-wrap" id="progress-orders" style="display:none">
@@ -403,8 +435,7 @@
                     <th>Date</th>
                     <th>Type</th>
                     <th>File</th>
-                    <th class="num">Imported</th>
-                    <th class="num">Skipped</th>
+                    <th class="num">Rows</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -508,16 +539,16 @@
 
   <!-- App modules — order matters: utilities first, then API/auth, then features, app last -->
   <!-- v=3 — bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=7"></script>
-  <script src="js/notifications.js?v=7"></script>
-  <script src="js/loading.js?v=7"></script>
-  <script src="js/api.js?v=7"></script>
-  <script src="js/auth.js?v=7"></script>
-  <script src="js/dashboard.js?v=7"></script>
-  <script src="js/inventory.js?v=7"></script>
-  <script src="js/orders.js?v=7"></script>
-  <script src="js/uploads.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/utilities.js?v=8"></script>
+  <script src="js/notifications.js?v=8"></script>
+  <script src="js/loading.js?v=8"></script>
+  <script src="js/api.js?v=8"></script>
+  <script src="js/auth.js?v=8"></script>
+  <script src="js/dashboard.js?v=8"></script>
+  <script src="js/inventory.js?v=8"></script>
+  <script src="js/orders.js?v=8"></script>
+  <script src="js/uploads.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 
 </body>
 </html>

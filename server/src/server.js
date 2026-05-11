@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
 
 import { env } from './config/env.js';
@@ -11,6 +12,7 @@ import { createTokenFactory } from './auth/tokens.js';
 
 import { createOrganizationsRepository } from './repositories/organizationsRepository.js';
 import { createUsersRepository } from './repositories/usersRepository.js';
+import { createMembershipsRepository } from './repositories/membershipsRepository.js';
 import { createInventoryRepository } from './repositories/inventoryRepository.js';
 import { createOrdersRepository } from './repositories/ordersRepository.js';
 import { createDashboardRepository } from './repositories/dashboardRepository.js';
@@ -31,9 +33,12 @@ import { ordersRoutes } from './routes/orders.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { uploadsRoutes } from './routes/uploads.js';
 import { usersRoutes } from './routes/users.js';
+import { membershipsRoutes } from './routes/memberships.js';
+import { organizationsRoutes } from './routes/organizations.js';
 
 export async function buildApp() {
   const fastify = Fastify({
+    bodyLimit: 20 * 1024 * 1024, // 20 MB — covers large JSON payloads
     logger: {
       level:     env.LOG_LEVEL,
       transport: env.NODE_ENV === 'development'
@@ -67,19 +72,14 @@ export async function buildApp() {
     const statusCode = error.statusCode ?? error.status ?? 500;
     const isServer   = statusCode >= 500;
 
-    if (isServer) {
-      request.log.error({ err: error }, 'Unhandled server error');
-    }
+    if (isServer) request.log.error({ err: error }, 'Unhandled server error');
 
     const body = {
       success:    false,
       error:      isServer && env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
       request_id: request.id,
     };
-
-    if (env.NODE_ENV !== 'production' && error.stack) {
-      body.stack = error.stack;
-    }
+    if (env.NODE_ENV !== 'production' && error.stack) body.stack = error.stack;
 
     return reply.code(statusCode).send(body);
   });
@@ -91,6 +91,9 @@ export async function buildApp() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
   fastify.register(jwt, { secret: env.JWT_SECRET });
+  fastify.register(multipart, {
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB per file
+  });
   fastify.register(sensible);
   fastify.register(bigqueryPlugin);
 
@@ -98,34 +101,34 @@ export async function buildApp() {
     const deps = { bq: fastify.bq, projectId: env.GCP_PROJECT_ID };
 
     // Repositories
-    const orgsRepo      = createOrganizationsRepository(deps);
-    const usersRepo     = createUsersRepository(deps);
-    const inventoryRepo = createInventoryRepository(deps);
-    const ordersRepo    = createOrdersRepository(deps);
-    const dashboardRepo = createDashboardRepository(deps);
-    const uploadsRepo   = createUploadsRepository(deps);
+    const orgsRepo         = createOrganizationsRepository(deps);
+    const usersRepo        = createUsersRepository(deps);
+    const membershipsRepo  = createMembershipsRepository(deps);
+    const inventoryRepo    = createInventoryRepository(deps);
+    const ordersRepo       = createOrdersRepository(deps);
+    const dashboardRepo    = createDashboardRepository(deps);
+    const uploadsRepo      = createUploadsRepository(deps);
 
     // Services
     const usernameService  = createUsernameService({ usersRepo });
-    const authService      = createAuthService({ usersRepo });
+    const authService      = createAuthService({ usersRepo, membershipsRepo });
     const inventoryService = createInventoryService({ inventoryRepo });
     const ordersService    = createOrdersService({ ordersRepo });
     const dashboardService = createDashboardService({ dashboardRepo });
-    const uploadsService   = createUploadsService({ uploadsRepo, ordersRepo });
-    const usersService     = createUsersService({ usersRepo, usernameService });
+    const uploadsService   = createUploadsService({ uploadsRepo });
+    const usersService     = createUsersService({ usersRepo, membershipsRepo, usernameService });
 
     const tokenFactory = createTokenFactory(fastify);
 
-    // orgsRepo available for Phase 3 org management routes
-    void orgsRepo;
-
     fastify.register(healthRoutes);
-    fastify.register(authRoutes,      { prefix: '/auth',      authService, usersRepo, tokenFactory });
-    fastify.register(inventoryRoutes, { prefix: '/inventory', inventoryService });
-    fastify.register(ordersRoutes,    { prefix: '/orders',    ordersService });
-    fastify.register(dashboardRoutes, { prefix: '/dashboard', dashboardService });
-    fastify.register(uploadsRoutes,   { prefix: '/uploads',   uploadsService });
-    fastify.register(usersRoutes,     { prefix: '/users',     usersService });
+    fastify.register(authRoutes,          { prefix: '/auth',          authService, usersRepo, membershipsRepo, tokenFactory });
+    fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService });
+    fastify.register(ordersRoutes,        { prefix: '/orders',        ordersService });
+    fastify.register(dashboardRoutes,     { prefix: '/dashboard',     dashboardService });
+    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService });
+    fastify.register(usersRoutes,         { prefix: '/users',         usersService });
+    fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
+    fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo });
   });
 
   return fastify;

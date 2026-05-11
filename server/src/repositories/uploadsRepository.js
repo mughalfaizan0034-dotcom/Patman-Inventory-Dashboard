@@ -4,6 +4,7 @@ export function createUploadsRepository({ bq, projectId }) {
   const invUploads = `\`${projectId}.${TABLES.INVENTORY_UPLOADS}\``;
   const ordUploads = `\`${projectId}.${TABLES.ORDER_UPLOADS}\``;
   const invTable   = `\`${projectId}.${TABLES.INVENTORY}\``;
+  const ordTable   = `\`${projectId}.${TABLES.ORDERS}\``;
 
   async function getHistory(organizationId, type = '') {
     const queries = [];
@@ -24,8 +25,8 @@ export function createUploadsRepository({ bq, projectId }) {
     }
 
     const combined = queries.join('\nUNION ALL\n');
-    const query = `${combined} ORDER BY created_at DESC LIMIT 100`;
-    const [rows] = await bq.query({ query, params: { organizationId } });
+    const query    = `${combined} ORDER BY created_at DESC LIMIT 100`;
+    const [rows]   = await bq.query({ query, params: { organizationId } });
     return rows;
   }
 
@@ -49,17 +50,28 @@ export function createUploadsRepository({ bq, projectId }) {
     await bq.query({ query, params: { uploadId, organizationId, userId, filename, rowCount, status } });
   }
 
-  // Replace full inventory for an org via delete + streaming insert
-  async function replaceInventory(organizationId, rows) {
+  // Streaming inventory replacement: delete first, then callers insert in batches.
+  async function deleteInventory(organizationId) {
     await bq.query({
       query:  `DELETE FROM ${invTable} WHERE organization_id = @organizationId`,
       params: { organizationId },
     });
-    if (rows.length) {
-      const dataset = bq.dataset('patman_inventory');
-      await dataset.table('inventory').insert(rows);
-    }
   }
 
-  return { getHistory, logInventoryUpload, logOrderUpload, replaceInventory };
+  async function insertInventoryBatch(rows) {
+    if (!rows.length) return;
+    const dataset = bq.dataset('patman_inventory');
+    await dataset.table('inventory').insert(rows);
+  }
+
+  async function insertOrdersBatch(rows) {
+    if (!rows.length) return;
+    const dataset = bq.dataset('patman_inventory');
+    await dataset.table('orders').insert(rows);
+  }
+
+  return {
+    getHistory, logInventoryUpload, logOrderUpload,
+    deleteInventory, insertInventoryBatch, insertOrdersBatch,
+  };
 }

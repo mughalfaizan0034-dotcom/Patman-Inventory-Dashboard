@@ -1,25 +1,32 @@
-const ROLE_LEVEL = { admin: 3, manager: 2, viewer: 1 };
+const ROLE_LEVEL = {
+  super_admin:         10,
+  organization_admin:   8,
+  admin:                6,
+  manager:              4,
+  staff:                2,
+  operator:             2,
+  viewer:               1,
+};
 
-// Verifies the Bearer JWT and rejects if the token type is not 'access'.
-// Binds user_id + organization_id to the child logger for structured logging downstream.
+// Verifies the Bearer JWT and rejects non-access tokens.
+// All access tokens must carry organization_id + membership_id (org-scoped).
 export async function authenticate(request, reply) {
   try {
     await request.jwtVerify();
-    const { type, user_id, organization_id } = request.user;
+    const { type, user_id, organization_id, membership_id } = request.user;
     if (type !== 'access') {
       return reply.code(401).send({ success: false, error: 'Invalid token type' });
     }
-    if (!organization_id) {
+    if (!organization_id || !membership_id) {
       return reply.code(401).send({ success: false, error: 'Token missing organization context' });
     }
-    request.log = request.log.child({ user_id, organization_id });
+    request.log = request.log.child({ user_id, organization_id, membership_id });
   } catch {
     return reply.code(401).send({ success: false, error: 'Token invalid or expired' });
   }
 }
 
-// Returns a preHandler that enforces a minimum role.
-// Must be composed after authenticate.
+// Enforces minimum role after authenticate runs.
 export function requireRole(minRole) {
   return async function (request, reply) {
     const userLevel = ROLE_LEVEL[request.user?.role] ?? 0;

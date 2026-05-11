@@ -7,4 +7,5 @@ export const loginBodySchema = z.object({
 
 export const refreshBodySchema = z.object({
   refresh_token: z.string().min(1),
+  membership_id: z.string().uuid().optional(),
 });
