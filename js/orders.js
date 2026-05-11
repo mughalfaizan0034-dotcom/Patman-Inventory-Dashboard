@@ -9,7 +9,7 @@ const Orders = (() => {
   let _loading   = false;
   let _platforms = [];
 
-  const COLS = ['Order ID', 'Date', 'SKU', 'UPC', 'Platform', 'Qty Sold', 'Shipped From', 'Status'];
+  const COLS = ['Order Date', 'SKU', 'Qty Sold', 'Shipped From Box', 'Platform'];
 
   /* ── Render ─────────────────────────────────────────────── */
   function _renderTable(rows, total) {
@@ -25,19 +25,13 @@ const Orders = (() => {
       return;
     }
 
-    tbody.innerHTML = rows.map(row => {
-      const isUndefined = !row.sku || row.sku === 'UNKNOWN';
-      return `<tr class="${isUndefined ? 'row-undef' : ''}">
-        <td style="font-family:monospace;font-size:12px">${Utils.escapeHtml(row.order_id || '—')}</td>
-        <td>${Utils.formatDate(row.order_date)}</td>
-        <td style="font-weight:500">${Utils.escapeHtml(row.sku || '—')}</td>
-        <td style="font-family:monospace;font-size:12px">${Utils.escapeHtml(row.upc || '—')}</td>
-        <td>${_platformBadge(row.platform)}</td>
-        <td class="num"><strong>${Utils.formatNumber(row.quantity_sold)}</strong></td>
-        <td>${Utils.escapeHtml(row.shipped_from_box || '—')}</td>
-        <td>${isUndefined ? Utils.badgeHtml('warning', 'Undefined SKU') : Utils.badgeHtml('success', 'Matched')}</td>
-      </tr>`;
-    }).join('');
+    tbody.innerHTML = rows.map(row => `<tr>
+      <td>${Utils.escapeHtml(row.order_date || '—')}</td>
+      <td style="font-weight:500">${Utils.escapeHtml(row.sku || '—')}</td>
+      <td class="num"><strong>${Utils.formatNumber(row.quantity_sold)}</strong></td>
+      <td>${Utils.escapeHtml(row.shipped_from_box || '—')}</td>
+      <td>${_platformBadge(row.platform)}</td>
+    </tr>`).join('');
 
     if (info) {
       const ps    = CONFIG.PAGE_SIZE;
@@ -51,12 +45,8 @@ const Orders = (() => {
 
   function _platformBadge(platform) {
     if (!platform) return '<span style="color:var(--txt-4)">—</span>';
-    const colors = {
-      amazon: 'info', ebay: 'warning', walmart: 'primary', shopify: 'success',
-    };
-    const key = platform.toLowerCase();
-    const variant = colors[key] || 'gray';
-    return Utils.badgeHtml(variant, platform);
+    const colors = { amazon: 'info', ebay: 'warning', walmart: 'primary', shopify: 'success' };
+    return Utils.badgeHtml(colors[platform.toLowerCase()] || 'gray', platform);
   }
 
   /* ── Load ────────────────────────────────────────────────── */
@@ -64,7 +54,6 @@ const Orders = (() => {
     if (_loading) return;
     _loading = true;
 
-    // Lazy-load platforms on first visit — never before auth is confirmed
     if (_platforms.length === 0) await _loadPlatforms();
 
     const tbody = document.getElementById('orders-tbody');
@@ -72,7 +61,7 @@ const Orders = (() => {
 
     try {
       const data = await API.getOrders(_page, CONFIG.PAGE_SIZE, _filters);
-      _renderTable(data.rows || data.orders || [], data.total || 0);
+      _renderTable(data.items || [], data.total || 0);
     } catch (err) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="${COLS.length}">${Loading.error('Failed to load orders')}</td></tr>`;
       Notify.apiError(err);
@@ -95,21 +84,19 @@ const Orders = (() => {
   /* ── Filter helpers ──────────────────────────────────────── */
   function _collectFilters() {
     _filters = {};
-    const platform = document.getElementById('filter-platform')?.value;
-    const dateFrom = document.getElementById('filter-date-from')?.value;
-    const dateTo   = document.getElementById('filter-date-to')?.value;
-    const search   = document.getElementById('orders-search')?.value.trim();
-    const status   = document.getElementById('filter-status')?.value;
+    const search     = document.getElementById('orders-search')?.value.trim();
+    const platform   = document.getElementById('filter-platform')?.value;
+    const dateFrom   = document.getElementById('filter-date-from')?.value;
+    const dateTo     = document.getElementById('filter-date-to')?.value;
 
-    if (platform) _filters.platform = platform;
-    if (dateFrom) _filters.dateFrom = dateFrom;
-    if (dateTo)   _filters.dateTo   = dateTo;
-    if (search)   _filters.search   = search;
-    if (status)   _filters.status   = status;
+    if (search)   _filters.search     = search;
+    if (platform) _filters.platform   = platform;
+    if (dateFrom) _filters.start_date = dateFrom;
+    if (dateTo)   _filters.end_date   = dateTo;
   }
 
   function _resetFilters() {
-    ['filter-platform','filter-date-from','filter-date-to','orders-search','filter-status'].forEach(id => {
+    ['orders-search', 'filter-platform', 'filter-date-from', 'filter-date-to'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -123,20 +110,19 @@ const Orders = (() => {
     const tbody = document.getElementById('orders-tbody');
     if (!tbody) return;
 
-    const rows   = Array.from(tbody.querySelectorAll('tr'));
-    const header = COLS.join(',');
-    const lines  = rows.map(tr =>
+    const rows  = Array.from(tbody.querySelectorAll('tr'));
+    const lines = rows.map(tr =>
       Array.from(tr.querySelectorAll('td'))
         .map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`)
         .join(',')
     );
 
-    const csv  = [header, ...lines].join('\n');
+    const csv  = [COLS.join(','), ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `orders-export-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -148,8 +134,8 @@ const Orders = (() => {
     const exportBtn = document.getElementById('orders-export');
     const searchEl  = document.getElementById('orders-search');
 
-    if (applyBtn) applyBtn.addEventListener('click', () => { _collectFilters(); _page = 1; load(); });
-    if (resetBtn) resetBtn.addEventListener('click', _resetFilters);
+    if (applyBtn)  applyBtn.addEventListener('click', () => { _collectFilters(); _page = 1; load(); });
+    if (resetBtn)  resetBtn.addEventListener('click', _resetFilters);
     if (exportBtn) exportBtn.addEventListener('click', _exportCSV);
 
     if (searchEl) {

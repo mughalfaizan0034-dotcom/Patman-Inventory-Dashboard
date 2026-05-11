@@ -3,7 +3,7 @@ import { TABLES } from '../config/tables.js';
 export function createOrdersRepository({ bq, projectId }) {
   const table = `\`${projectId}.${TABLES.ORDERS}\``;
 
-  async function findAll({ organizationId, page, pageSize, platform, startDate, endDate }) {
+  async function findAll({ organizationId, page, pageSize, platform, startDate, endDate, search }) {
     const offset = (page - 1) * pageSize;
 
     const conditions = ['organization_id = @organizationId'];
@@ -21,13 +21,15 @@ export function createOrdersRepository({ bq, projectId }) {
       conditions.push('order_date <= @endDate');
       params.endDate = endDate;
     }
+    if (search) {
+      conditions.push('LOWER(sku) LIKE @search');
+      params.search = `%${search.toLowerCase()}%`;
+    }
 
     const where = `WHERE ${conditions.join(' AND ')}`;
 
     const dataQuery = `
-      SELECT
-        order_date, sku, quantity_sold,
-        shipped_from_box, platform, created_at
+      SELECT order_date, sku, quantity_sold, shipped_from_box, platform, created_at
       FROM ${table}
       ${where}
       ORDER BY order_date DESC, created_at DESC

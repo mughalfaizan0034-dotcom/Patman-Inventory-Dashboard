@@ -307,15 +307,10 @@
             <div class="filter-bar" style="flex-wrap:wrap">
               <div style="position:relative;flex:1;min-width:180px">
                 <span class="search-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4)">🔍</span>
-                <input class="form-input search-input" id="orders-search" placeholder="Order ID or SKU…">
+                <input class="form-input search-input" id="orders-search" placeholder="Search by SKU…">
               </div>
               <select class="form-select" id="filter-platform" style="width:160px">
                 <option value="">All Platforms</option>
-              </select>
-              <select class="form-select" id="filter-status" style="width:140px">
-                <option value="">All Status</option>
-                <option value="matched">Matched</option>
-                <option value="undefined">Undefined SKU</option>
               </select>
               <input class="form-input" id="filter-date-from" type="date" style="width:145px" title="From date">
               <input class="form-input" id="filter-date-to"   type="date" style="width:145px" title="To date">
@@ -326,14 +321,11 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Order ID</th>
-                    <th>Date</th>
+                    <th>Order Date</th>
                     <th>SKU</th>
-                    <th>UPC</th>
-                    <th>Platform</th>
                     <th class="num">Qty Sold</th>
-                    <th>Shipped From</th>
-                    <th>Status</th>
+                    <th>Shipped From Box</th>
+                    <th>Platform</th>
                   </tr>
                 </thead>
                 <tbody id="orders-tbody"></tbody>

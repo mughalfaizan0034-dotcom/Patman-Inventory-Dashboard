@@ -9,6 +9,7 @@ const ordersQuerySchema = z.object({
   platform:   z.string().optional(),
   start_date: z.string().optional(),
   end_date:   z.string().optional(),
+  search:     z.string().optional(),
 });
 
 export async function ordersRoutes(fastify, { ordersService }) {
@@ -18,13 +19,14 @@ export async function ordersRoutes(fastify, { ordersService }) {
       return reply.code(400).send({ success: false, error: 'Invalid query parameters' });
     }
 
-    const { page, pageSize, platform, start_date, end_date } = parsed.data;
+    const { page, pageSize, platform, start_date, end_date, search } = parsed.data;
     try {
       const data = await ordersService.list(request.user.organization_id, {
         page, pageSize,
         platform:  platform  || null,
         startDate: start_date || null,
         endDate:   end_date   || null,
+        search:    search     || null,
       });
       return reply.send({ success: true, data });
     } catch (err) {
