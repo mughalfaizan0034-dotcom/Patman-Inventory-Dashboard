@@ -30,5 +30,9 @@ export function createOrdersService({ ordersRepo }) {
     await ordersRepo.updateRow(organizationId, rowId, updates);
   }
 
-  return { list, getPlatforms, deleteRows, updateRow };
+  async function exportAll(organizationId, filters) {
+    return ordersRepo.exportAll({ organizationId, ...filters });
+  }
+
+  return { list, exportAll, getPlatforms, deleteRows, updateRow };
 }

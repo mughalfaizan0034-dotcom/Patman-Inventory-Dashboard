@@ -549,40 +549,25 @@ const Orders = (() => {
   }
 
   async function _doExport(mode, options = {}) {
-    let rows;
     try {
-      if (mode === 'alltime') {
-        const data = await API.getOrders(1, 5000, {});
-        rows = data.items || [];
-      } else {
-        const filters = {};
+      const filters = { ..._filters };
+      if (mode === 'daterange') {
         if (options.from) filters.start_date = options.from;
         if (options.to)   filters.end_date   = options.to;
-        const data = await API.getOrders(1, 5000, filters);
-        rows = data.items || [];
       }
+      filters.sort_by  = _sortBy;
+      filters.sort_dir = _sortDir;
+
+      const blob = await API.exportOrders(filters);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       Notify.apiError(err);
-      return;
     }
-
-    const header = DATA_COLS.join(',');
-    const lines  = rows.map(r => [
-      r.order_date       || '',
-      r.sku              || '',
-      r.quantity_sold    ?? '',
-      r.shipped_from_box || '',
-      r.platform         || '',
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-
-    const csv  = [header, ...lines].join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   /* ── Init ────────────────────────────────────────────────── */

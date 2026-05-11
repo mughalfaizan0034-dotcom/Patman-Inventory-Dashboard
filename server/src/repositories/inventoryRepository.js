@@ -183,5 +183,79 @@ export function createInventoryRepository({ bq, projectId }) {
     };
   }
 
-  return { findAll, deleteBySkus, updateRow, findAlternativeBoxes };
+  async function exportAll({ organizationId, search, sortBy, sortDir, status = 'all' }) {
+    const conditions = ['i.organization_id = @organizationId'];
+    const params     = { organizationId };
+
+    if (search) {
+      conditions.push('(LOWER(i.sku) = @search OR LOWER(i.upc) = @search OR LOWER(i.part_number) = @search)');
+      params.search = search.toLowerCase();
+    }
+
+    if (status === 'undefined') {
+      conditions.push(`(
+        UPPER(TRIM(COALESCE(i.sku, '')))           IN ('NA','N/A','')
+        OR UPPER(TRIM(COALESCE(i.upc, '')))        IN ('NA','N/A','')
+        OR UPPER(TRIM(COALESCE(i.part_number,''))) IN ('NA','N/A','')
+      )`);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+
+    const sortMap = {
+      sku:             'i.sku',
+      upc:             'i.upc',
+      box_number:      'i.box_number',
+      quantity:        'i.quantity',
+      date_added:      'i.date_added',
+      part_number:     'i.part_number',
+      notes:           'i.notes',
+      units_sold:      'units_sold',
+      remaining_stock: 'remaining_stock',
+    };
+    const col = sortMap[sortBy] || 'i.date_added';
+    const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+
+    const needsStockFilter = status === 'in_stock' || status === 'oos' || status === 'phantom';
+    const stockCond = needsStockFilter
+      ? `AND (i.quantity - COALESCE(o.units_sold, 0)) ${
+          status === 'in_stock' ? '> 0' :
+          status === 'oos'      ? '= 0' :
+          '< 0'
+        }`
+      : '';
+
+    const cte = `
+      WITH ord_summary AS (
+        SELECT
+          CASE
+            WHEN shipped_from_box IS NOT NULL
+                 AND TRIM(CAST(shipped_from_box AS STRING)) != ''
+                 AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
+            THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)), REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
+            ELSE sku
+          END AS effective_sku,
+          SUM(quantity_sold) AS units_sold
+        FROM ${ordTable}
+        WHERE organization_id = @organizationId
+        GROUP BY effective_sku
+      )`;
+
+    const query = `
+      ${cte}
+      SELECT
+        i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
+        COALESCE(o.units_sold, 0) AS units_sold,
+        i.quantity - COALESCE(o.units_sold, 0) AS remaining_stock
+      FROM ${invTable} i
+      LEFT JOIN ord_summary o ON i.sku = o.effective_sku
+      ${where} ${stockCond}
+      ORDER BY ${col} ${dir}
+    `;
+
+    const [rows] = await bq.query({ query, params });
+    return rows;
+  }
+
+  return { findAll, exportAll, deleteBySkus, updateRow, findAlternativeBoxes };
 }

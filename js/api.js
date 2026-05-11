@@ -118,6 +118,35 @@ const API = (() => {
     }
   }
 
+  /* ── GET (raw Blob — for CSV exports) ───────────────────── */
+  async function _crGetBlobRaw(path, params = {}) {
+    const tok = getToken();
+    const url = new URL(CONFIG.CLOUD_RUN_URL + path);
+    for (const [k, v] of Object.entries(params)) {
+      if (v == null || v === '') continue;
+      url.searchParams.set(k, String(v));
+    }
+    const res = await _fetchWithTimeout(url.toString(), {
+      method: 'GET',
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    }, 120000);
+    if (!res.ok) {
+      const err = new Error(`Export failed: HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  }
+
+  async function _crGetBlob(path, params = {}) {
+    try { return await _crGetBlobRaw(path, params); }
+    catch (err) {
+      if (err.status !== 401) throw err;
+      await _attemptRefresh();
+      return _crGetBlobRaw(path, params);
+    }
+  }
+
   /* ── POST ────────────────────────────────────────────────── */
   async function _crPostRaw(path, body) {
     const tok = getToken();
@@ -256,9 +285,11 @@ const API = (() => {
     /* Inventory */
     async searchBox(query)                                    { return _crGet('/inventory', { search: query, pageSize: 10, page: 1 }); },
     async getInventoryList(page=1, pageSize=CONFIG.PAGE_SIZE, search='', options={}) { return _crGet('/inventory', { page, pageSize, search, ...options }); },
+    async exportInventory(filters={}) { return _crGetBlob('/inventory/export', filters); },
 
     /* Orders */
     async getOrders(page=1, pageSize=CONFIG.PAGE_SIZE, filters={}) { return _crGet('/orders', { page, pageSize, ...filters }); },
+    async exportOrders(filters={})    { return _crGetBlob('/orders/export', filters); },
     async getPlatforms()                                            { return _crGet('/orders/platforms'); },
     async deleteOrders(payload)                                     { return _crDelete('/orders/rows', payload); },
     async updateOrder(rowId, updates)                               { return _crPatch(`/orders/${encodeURIComponent(rowId)}`, updates); },

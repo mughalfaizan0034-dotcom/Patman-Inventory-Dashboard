@@ -3,6 +3,16 @@ import { z } from 'zod';
 
 const positiveInt = z.coerce.number().int().positive();
 
+const ordersExportSchema = z.object({
+  platform:     z.string().optional(),
+  start_date:   z.string().optional(),
+  end_date:     z.string().optional(),
+  search:       z.string().optional(),
+  sort_by:      z.enum(['order_date','sku','quantity_sold','platform','shipped_from_box']).optional().default('order_date'),
+  sort_dir:     z.enum(['asc','desc']).optional().default('desc'),
+  phantom_only: z.coerce.boolean().optional().default(false),
+});
+
 const ordersQuerySchema = z.object({
   page:         positiveInt.optional().default(1),
   pageSize:     positiveInt.max(10000).optional().default(50),
@@ -38,6 +48,40 @@ const patchSchema = z.object({
 });
 
 export async function ordersRoutes(fastify, { ordersService, activityService }) {
+  fastify.get('/export', { preHandler: [authenticate] }, async (request, reply) => {
+    const parsed = ordersExportSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ success: false, error: 'Invalid query parameters' });
+    }
+    try {
+      const { sort_by, sort_dir, phantom_only, start_date, end_date, ...rest } = parsed.data;
+      const rows = await ordersService.exportAll(request.user.organization_id, {
+        ...rest,
+        startDate:   start_date   || null,
+        endDate:     end_date     || null,
+        sortBy:      sort_by,
+        sortDir:     sort_dir,
+        phantomOnly: phantom_only,
+      });
+
+      const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const header = 'Order Date,SKU,Qty Sold,Shipped From Box,Platform';
+      const lines  = rows.map(r => [
+        r.order_date, r.sku, r.quantity_sold, r.shipped_from_box, r.platform,
+      ].map(esc).join(','));
+
+      const filename = `orders-export-${new Date().toISOString().slice(0,10)}.csv`;
+      const csv      = '﻿' + [header, ...lines].join('\n');
+
+      reply.header('Content-Type', 'text/csv; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      return reply.send(csv);
+    } catch (err) {
+      request.log.error({ err }, 'Orders export error');
+      return reply.code(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
+
   fastify.get('/', { preHandler: [authenticate] }, async (request, reply) => {
     const parsed = ordersQuerySchema.safeParse(request.query);
     if (!parsed.success) {

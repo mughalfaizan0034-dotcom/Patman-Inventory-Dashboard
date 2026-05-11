@@ -564,21 +564,13 @@ const InventoryList = (() => {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Exporting…'; }
     const isFiltered = _search || _statusFilter !== 'all';
     try {
-      const data = await API.getInventoryList(1, 5000, _search, {
-        sort_by:  _sortBy,
-        sort_dir: _sortDir,
-        status:   _statusFilter,
-      });
-      const rows = data.items || data.rows || [];
-      const header = 'SKU,Box #,Part #,UPC,Initial Qty,Units Sold,Remaining,Date Added,Notes';
-      const lines  = rows.map(r => [
-        r.sku || '', r.box_number || '', r.part_number || '', r.upc || '',
-        r.quantity ?? '', r.units_sold ?? '',
-        (Number(r.quantity ?? 0) - Number(r.units_sold ?? 0)),
-        r.date_added || '', r.notes || '',
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-      const csv  = [header, ...lines].join('\n');
-      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const filters = {
+        sort_by:  _sortBy  || undefined,
+        sort_dir: _sortDir || undefined,
+        status:   _statusFilter !== 'all' ? _statusFilter : undefined,
+      };
+      if (_search) filters.search = _search;
+      const blob = await API.exportInventory(filters);
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;

@@ -28,5 +28,9 @@ export function createInventoryService({ inventoryRepo }) {
     };
   }
 
-  return { list, deleteRows, updateRow, findAlternatives };
+  async function exportAll(organizationId, filters) {
+    return inventoryRepo.exportAll({ organizationId, ...filters });
+  }
+
+  return { list, exportAll, deleteRows, updateRow, findAlternatives };
 }
