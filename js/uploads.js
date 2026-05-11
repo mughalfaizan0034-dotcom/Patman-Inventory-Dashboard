@@ -254,7 +254,7 @@ const Uploads = (() => {
   /* ── Template downloads ─────────────────────────────────── */
   const _templates = {
     inventory: {
-      filename: 'inventory_template.txt',
+      filename: 'inventory_template.csv',
       // Tab-delimited. UPC/SKU are TEXT — format those columns as Text in Excel
       // BEFORE entering values to prevent leading-zero loss.
       // action: Add (insert new), Update (partial update by sku), Remove (delete by sku)
@@ -267,7 +267,7 @@ const Uploads = (() => {
       ].join('\r\n'),
     },
     orders: {
-      filename: 'orders_template.txt',
+      filename: 'orders_template.csv',
       // action: Add (insert new order, order_id auto-generated), Update/Remove (require order_id)
       content: [
         'action\torder_id\torder_date\tsku\tquantity_sold\tplatform\tshipped_from_box',

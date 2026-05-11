@@ -132,8 +132,8 @@ export async function uploadsRoutes(fastify, { uploadsService }) {
       }
 
       return reply
-        .header('Content-Type', 'text/plain; charset=utf-8')
-        .header('Content-Disposition', `attachment; filename="${type}_template.txt"`)
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="${type}_template.csv"`)
         .send(templates[type]);
     }
   );
