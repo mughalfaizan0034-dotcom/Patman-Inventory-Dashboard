@@ -24,13 +24,12 @@ export async function buildApp() {
     },
   });
 
-  // Core plugins
-  await fastify.register(cors, { origin: env.CORS_ORIGIN });
-  await fastify.register(jwt,  { secret: env.JWT_SECRET });
-  await fastify.register(sensible);
-  await fastify.register(bigqueryPlugin);
+  // Plugins are queued; after() fires once they've all loaded (during ready/listen)
+  fastify.register(cors, { origin: env.CORS_ORIGIN });
+  fastify.register(jwt,  { secret: env.JWT_SECRET });
+  fastify.register(sensible);
+  fastify.register(bigqueryPlugin);
 
-  // Wire up dependency graph after plugins are ready
   fastify.after(() => {
     const deps = { bq: fastify.bq, projectId: env.GCP_PROJECT_ID };
 

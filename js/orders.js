@@ -64,6 +64,9 @@ const Orders = (() => {
     if (_loading) return;
     _loading = true;
 
+    // Lazy-load platforms on first visit — never before auth is confirmed
+    if (_platforms.length === 0) await _loadPlatforms();
+
     const tbody = document.getElementById('orders-tbody');
     if (tbody) tbody.innerHTML = Loading.tableRows(COLS.length, 8);
 
@@ -140,8 +143,6 @@ const Orders = (() => {
 
   /* ── Init ────────────────────────────────────────────────── */
   function init() {
-    _loadPlatforms();
-
     const applyBtn  = document.getElementById('orders-apply-filters');
     const resetBtn  = document.getElementById('orders-reset-filters');
     const exportBtn = document.getElementById('orders-export');
