@@ -8,10 +8,11 @@ substitutions:
 
 # ── Steps ─────────────────────────────────────────────────────────────────────
 steps:
-  # 1 — Build image
+  # 1 — Build image (--no-cache ensures stale layers never hide updated source)
   - name: gcr.io/cloud-builders/docker
     args:
       - build
+      - --no-cache
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest
       - -f

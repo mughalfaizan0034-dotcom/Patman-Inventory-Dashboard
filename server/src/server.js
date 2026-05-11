@@ -97,8 +97,13 @@ export async function buildApp() {
   fastify.register(sensible);
   fastify.register(bigqueryPlugin);
 
+  // Build fingerprint — proof of which source revision is running.
+  const BUILD_TS  = new Date().toISOString();
+  const BUILD_TAG = 'memberships-v2-uploads-pipeline';
+
   fastify.after(() => {
-    fastify.log.info('[BOOT] after() entered — building repos and services');
+    // console.log goes straight to Cloud Run stdout, bypasses pino formatting.
+    console.log(`[BOOT] after() entered  build=${BUILD_TAG}  ts=${BUILD_TS}`);
 
     const deps = { bq: fastify.bq, projectId: env.GCP_PROJECT_ID };
 
@@ -122,7 +127,7 @@ export async function buildApp() {
 
     const tokenFactory = createTokenFactory(fastify);
 
-    fastify.log.info('[BOOT] registering routes');
+    console.log('[BOOT] registering routes');
     fastify.register(healthRoutes);
     fastify.register(authRoutes,          { prefix: '/auth',          authService, usersRepo, membershipsRepo, tokenFactory });
     fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService });
@@ -132,17 +137,25 @@ export async function buildApp() {
     fastify.register(usersRoutes,         { prefix: '/users',         usersService });
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
     fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo });
-    fastify.log.info('[BOOT] all route plugins registered');
+    console.log('[BOOT] all route plugins registered');
 
-    // Enable with: DEBUG_ROUTES=true in Cloud Run env vars.
+    // Always-on debug endpoints — removed after deployment is verified.
+    fastify.get('/debug/version', async () => ({
+      build_tag:   BUILD_TAG,
+      build_ts:    BUILD_TS,
+      jwt_version: 'memberships-v2',
+      node_env:    env.NODE_ENV,
+      project_id:  env.GCP_PROJECT_ID,
+    }));
+
     if (process.env.DEBUG_ROUTES === 'true') {
       fastify.get('/debug/routes', async () => ({ routes: fastify.printRoutes({ commonPrefix: false }) }));
     }
   });
 
-  // Log all registered routes on startup — visible in Cloud Run logs.
   fastify.addHook('onReady', async () => {
-    fastify.log.info({ event: 'routes_registered' }, '\n' + fastify.printRoutes({ commonPrefix: false }));
+    const routeTable = fastify.printRoutes({ commonPrefix: false });
+    console.log('[onReady] route table:\n' + routeTable);
   });
 
   return fastify;
