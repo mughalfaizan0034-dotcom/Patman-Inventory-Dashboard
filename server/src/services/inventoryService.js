@@ -1,6 +1,6 @@
 export function createInventoryService({ inventoryRepo }) {
-  async function list(filters) {
-    const { items, total } = await inventoryRepo.findAll(filters);
+  async function list(organizationId, filters) {
+    const { items, total } = await inventoryRepo.findAll({ organizationId, ...filters });
     return {
       items,
       total,

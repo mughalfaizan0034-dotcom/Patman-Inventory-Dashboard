@@ -12,6 +12,7 @@ export const DATASETS = {
 // Fully-qualified dataset.table strings.
 // Usage: `${GCP_PROJECT_ID}.${TABLES.INVENTORY}` → 'patman-inventory.patman_inventory.inventory'
 export const TABLES = {
+  ORGANIZATIONS:     `${DATASETS.CORE}.organizations`,
   INVENTORY:         `${DATASETS.CORE}.inventory`,
   ORDERS:            `${DATASETS.CORE}.orders`,
   USERS:             `${DATASETS.CORE}.users`,

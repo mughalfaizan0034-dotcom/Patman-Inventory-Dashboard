@@ -1,16 +1,19 @@
 import { randomUUID } from 'crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible';
 
 import { env } from './config/env.js';
 import bigqueryPlugin from './plugins/bigquery.js';
 import { createTokenFactory } from './auth/tokens.js';
+import { createOrganizationsRepository } from './repositories/organizationsRepository.js';
 import { createUsersRepository } from './repositories/usersRepository.js';
 import { createInventoryRepository } from './repositories/inventoryRepository.js';
 import { createAuthService } from './services/authService.js';
 import { createInventoryService } from './services/inventoryService.js';
+import { createUsernameService } from './services/usernameService.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { inventoryRoutes } from './routes/inventory.js';
@@ -32,6 +35,12 @@ export async function buildApp() {
     genReqId: () => randomUUID(),
   });
 
+  // Propagate request ID to every response
+  fastify.addHook('onSend', (request, reply, _payload, done) => {
+    reply.header('x-request-id', request.id);
+    done();
+  });
+
   // Inject Cloud Trace context so Cloud Logging can correlate requests to traces
   fastify.addHook('onRequest', (request, _reply, done) => {
     const traceHeader = request.headers['x-cloud-trace-context'];
@@ -44,23 +53,49 @@ export async function buildApp() {
     done();
   });
 
+  // Centralized error handler — masks internals in production, includes request_id always
+  fastify.setErrorHandler((error, request, reply) => {
+    const statusCode = error.statusCode ?? error.status ?? 500;
+    const isServer   = statusCode >= 500;
+
+    if (isServer) {
+      request.log.error({ err: error }, 'Unhandled server error');
+    }
+
+    const body = {
+      success:    false,
+      error:      isServer && env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+      request_id: request.id,
+    };
+
+    if (env.NODE_ENV !== 'production' && error.stack) {
+      body.stack = error.stack;
+    }
+
+    return reply.code(statusCode).send(body);
+  });
+
   // Plugins are queued; after() fires once they've all loaded (during ready/listen)
+  fastify.register(helmet, { global: true });
   fastify.register(cors, {
     origin:  env.CORS_ORIGIN,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
   fastify.register(jwt,  { secret: env.JWT_SECRET });
+  fastify.register(jwt,  { secret: env.REFRESH_SECRET, namespace: 'refreshJwt' });
   fastify.register(sensible);
   fastify.register(bigqueryPlugin);
 
   fastify.after(() => {
     const deps = { bq: fastify.bq, projectId: env.GCP_PROJECT_ID };
 
+    const orgsRepo      = createOrganizationsRepository(deps);
     const usersRepo     = createUsersRepository(deps);
     const inventoryRepo = createInventoryRepository(deps);
 
-    const authService      = createAuthService({ usersRepo });
+    const usernameService  = createUsernameService({ usersRepo });
+    const authService      = createAuthService({ orgsRepo, usersRepo });
     const inventoryService = createInventoryService({ inventoryRepo });
 
     const tokenFactory = createTokenFactory(fastify);

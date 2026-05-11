@@ -3,11 +3,12 @@ import { TABLES } from '../config/tables.js';
 export function createInventoryRepository({ bq, projectId }) {
   const table = `\`${projectId}.${TABLES.INVENTORY}\``;
 
-  async function findAll({ page, pageSize, search, platform, status, sortBy, sortDir }) {
+  // organizationId is mandatory — never omit it.
+  async function findAll({ organizationId, page, pageSize, search, platform, status, sortBy, sortDir }) {
     const offset = (page - 1) * pageSize;
 
-    const conditions = [];
-    const params = {};
+    const conditions = ['organization_id = @organizationId'];
+    const params     = { organizationId };
 
     if (search) {
       conditions.push('(LOWER(sku) LIKE @search OR LOWER(name) LIKE @search)');
@@ -22,14 +23,12 @@ export function createInventoryRepository({ bq, projectId }) {
       params.isActive = status === 'active';
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
 
-    // sortBy and sortDir are validated by zod enum — safe to interpolate
     const allowedSort = ['sku', 'name', 'platform', 'stock', 'updated_at'];
     const col = allowedSort.includes(sortBy) ? sortBy : 'updated_at';
     const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
-    // LIMIT/OFFSET cannot be parameterized in BigQuery — validated integers only
     const dataQuery = `
       SELECT
         sku, name, platform, is_active,

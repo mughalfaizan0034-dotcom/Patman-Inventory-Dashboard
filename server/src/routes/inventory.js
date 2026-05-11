@@ -12,7 +12,8 @@ export async function inventoryRoutes(fastify, { inventoryService }) {
       }
 
       try {
-        const result = await inventoryService.list(parsed.data);
+        const organizationId = request.user.organization_id;
+        const result = await inventoryService.list(organizationId, parsed.data);
         return reply.send({ success: true, data: result });
       } catch (err) {
         request.log.error({ err }, 'Inventory list error');

@@ -7,17 +7,18 @@ export function createTokenFactory(fastify) {
     signAccessToken(user) {
       return fastify.jwt.sign(
         {
-          user_id: user.user_id,
-          email:   user.email,
-          role:    user.role,
-          type:    'access',
+          user_id:         user.user_id,
+          organization_id: user.organization_id,
+          username:        user.username,
+          role:            user.role,
+          type:            'access',
         },
         { expiresIn: env.JWT_ACCESS_EXPIRES }
       );
     },
 
     signRefreshToken(user) {
-      return fastify.jwt.sign(
+      return fastify.refreshJwt.sign(
         { user_id: user.user_id, type: 'refresh' },
         { expiresIn: env.JWT_REFRESH_EXPIRES }
       );

@@ -133,14 +133,14 @@ const API = (() => {
   return {
 
     /* Auth — Cloud Run when available, Apps Script fallback */
-    async login(email, password) {
+    async login(organization, username, password) {
       if (CONFIG.CLOUD_RUN_URL) {
-        const data = await _crPost('/auth/login', { email, password }, 0);
-        // Cloud Run returns { access_token, refresh_token, user }
-        // Normalize to Apps Script shape { token, user } for Auth.saveSession()
+        const data = await _crPost('/auth/login', { organization, username, password }, 0);
+        // Normalize Cloud Run response to shape Auth.saveSession() expects
         return { token: data.access_token, refresh_token: data.refresh_token, user: data.user };
       }
-      return _get('login', { email, password }, 0);
+      // Apps Script fallback: temporary, org/username not supported there
+      return _get('login', { email: username, password }, 0);
     },
 
     async logout() {

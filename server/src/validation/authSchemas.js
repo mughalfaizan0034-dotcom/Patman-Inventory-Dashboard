@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
 export const loginBodySchema = z.object({
-  email:    z.string().email(),
-  password: z.string().min(1),
+  organization: z.string().min(1).max(64),
+  username:     z.string().min(1).max(32),
+  password:     z.string().min(1),
 });
 
 export const refreshBodySchema = z.object({
