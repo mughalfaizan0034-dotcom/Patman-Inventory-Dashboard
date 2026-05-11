@@ -534,7 +534,6 @@ const Orders = (() => {
     const applyBtn     = document.getElementById('orders-apply-filters');
     const resetBtn     = document.getElementById('orders-reset-filters');
     const exportBtn    = document.getElementById('orders-export');
-    const uploadBtn    = document.getElementById('orders-upload-btn');
     const searchEl     = document.getElementById('orders-search');
     const selectAll    = document.getElementById('orders-select-all');
     const deleteSelBtn = document.getElementById('orders-delete-selected');
@@ -543,7 +542,6 @@ const Orders = (() => {
     if (applyBtn)     applyBtn.addEventListener('click',     () => { _collectFilters(); _page = 1; load(); });
     if (resetBtn)     resetBtn.addEventListener('click',     _resetFilters);
     if (exportBtn)    exportBtn.addEventListener('click',    _openExportModal);
-    if (uploadBtn)    uploadBtn.addEventListener('click',    () => Uploads.openModal('orders'));
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
     if (phantomCb)    phantomCb.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
 

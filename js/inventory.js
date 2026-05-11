@@ -516,7 +516,6 @@ const InventoryList = (() => {
     const selectAll    = document.getElementById('inv-select-all');
     const deleteSelBtn = document.getElementById('inv-delete-selected');
     const exportBtn    = document.getElementById('inventory-export-btn');
-    const uploadBtn    = document.getElementById('inventory-upload-btn');
 
     if (searchInput) {
       searchInput.addEventListener('keydown', e => {
@@ -551,7 +550,6 @@ const InventoryList = (() => {
 
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
     if (exportBtn)    exportBtn.addEventListener('click', _doExportInventory);
-    if (uploadBtn)    uploadBtn.addEventListener('click', () => Uploads.openModal('inventory'));
 
     _initSortHeaders();
   }
