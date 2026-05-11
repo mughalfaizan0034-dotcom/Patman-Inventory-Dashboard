@@ -1,0 +1,43 @@
+# ── Substitutions ─────────────────────────────────────────────────────────────
+# Override with: gcloud builds submit --substitutions=_REGION=us-central1,...
+substitutions:
+  _REGION:    us-central1
+  _REPO:      patman-inventory
+  _SERVICE:   patman-inventory-api
+  _IMAGE:     patman-api
+
+# ── Steps ─────────────────────────────────────────────────────────────────────
+steps:
+  # 1 — Build image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA
+      - -f
+      - server/Dockerfile
+      - server/
+
+  # 2 — Push to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA
+
+  # 3 — Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      # Uncomment and set after creating the dedicated service account:
+      # - --service-account=patman-api@$PROJECT_ID.iam.gserviceaccount.com
+      - --set-secrets=JWT_SECRET=patman-jwt-secret:latest,JWT_REFRESH_SECRET=patman-jwt-refresh-secret:latest,GCP_PROJECT_ID=patman-project-id:latest
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA
