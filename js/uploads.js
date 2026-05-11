@@ -243,9 +243,9 @@ const Uploads = (() => {
     orders: {
       filename: 'orders_template.csv',
       content: [
-        'order_date,sku,quantity_sold,shipped_from_box,platform',
-        '2026-05-11,SKU-001,2,BX-001,Amazon',
-        '2026-05-11,SKU-002,1,BX-002,eBay',
+        'order_date,sku,quantity_sold,platform,shipped_from_box',
+        '2026-05-11,SKU-001,2,Amazon,BX-001',
+        '2026-05-11,SKU-002,1,eBay,',
       ].join('\r\n'),
     },
   };

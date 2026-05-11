@@ -159,21 +159,24 @@ const API = (() => {
   }
 
   /* ── DELETE ──────────────────────────────────────────────── */
-  async function _crDeleteRaw(path) {
+  async function _crDeleteRaw(path, body) {
     const tok = getToken();
+    const headers = tok ? { Authorization: `Bearer ${tok}` } : {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
     const res = await _fetchWithTimeout(CONFIG.CLOUD_RUN_URL + path, {
       method:  'DELETE',
-      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+      headers,
+      body:    body !== undefined ? JSON.stringify(body) : undefined,
     }, CONFIG.TIMEOUT_MS);
     return _parseResponse(res);
   }
 
-  async function _crDelete(path) {
-    try { return await _crDeleteRaw(path); }
+  async function _crDelete(path, body) {
+    try { return await _crDeleteRaw(path, body); }
     catch (err) {
       if (err.status !== 401) throw err;
       await _attemptRefresh();
-      return _crDeleteRaw(path);
+      return _crDeleteRaw(path, body);
     }
   }
 
@@ -253,6 +256,7 @@ const API = (() => {
     /* Orders */
     async getOrders(page=1, pageSize=CONFIG.PAGE_SIZE, filters={}) { return _crGet('/orders', { page, pageSize, ...filters }); },
     async getPlatforms()                                            { return _crGet('/orders/platforms'); },
+    async deleteOrders(payload)                                     { return _crDelete('/orders/rows', payload); },
 
     /* Uploads — file is a File object (multipart) */
     async uploadInventory(file) { return _crMultipart('/uploads/inventory', file); },
