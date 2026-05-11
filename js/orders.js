@@ -397,62 +397,6 @@ const Orders = (() => {
     cancelB.addEventListener('click',  onCancel);
   }
 
-  /* ── Bulk delete (filter-based) ──────────────────────────── */
-  function _deleteOrders() {
-    _collectFilters();
-    const hasFilter = Object.keys(_filters).length > 0;
-    if (!hasFilter) {
-      Notify.warning('No filter applied', 'Apply at least one filter before using Delete Orders.');
-      return;
-    }
-    const parts = [];
-    if (_filters.platform)     parts.push(`platform: ${_filters.platform}`);
-    if (_filters.start_date)   parts.push(`from: ${_filters.start_date}`);
-    if (_filters.end_date)     parts.push(`to: ${_filters.end_date}`);
-    if (_filters.search)       parts.push(`SKU contains: "${_filters.search}"`);
-    if (_filters.phantom_only) parts.push('phantom orders only');
-
-    const modal    = document.getElementById('orders-delete-modal');
-    const msg      = document.getElementById('orders-delete-modal-msg');
-    const confirmB = document.getElementById('orders-delete-confirm');
-    const cancelB  = document.getElementById('orders-delete-cancel');
-    if (!modal) return;
-    if (msg) msg.textContent = `Delete ALL orders matching [${parts.join(', ')}]? This cannot be undone.`;
-    modal.style.display = 'flex';
-
-    const cleanup = () => { modal.style.display = 'none'; };
-    const onConfirm = async () => {
-      confirmB.removeEventListener('click', onConfirm);
-      cancelB.removeEventListener('click', onCancel);
-      cleanup();
-      try {
-        confirmB.disabled = true;
-        const result = await API.deleteOrders({
-          filters: {
-            platform:    _filters.platform   || undefined,
-            start_date:  _filters.start_date || undefined,
-            end_date:    _filters.end_date   || undefined,
-            search:      _filters.search     || undefined,
-          },
-        });
-        Notify.success('Deleted', `Removed ${result.deleted ?? '?'} order${result.deleted !== 1 ? 's' : ''}`);
-        _page = 1;
-        load();
-      } catch (err) {
-        Notify.apiError(err);
-      } finally {
-        confirmB.disabled = false;
-      }
-    };
-    const onCancel = () => {
-      confirmB.removeEventListener('click', onConfirm);
-      cancelB.removeEventListener('click', onCancel);
-      cleanup();
-    };
-    confirmB.addEventListener('click', onConfirm);
-    cancelB.addEventListener('click',  onCancel);
-  }
-
   /* ── Export modal ────────────────────────────────────────── */
   function _openExportModal() {
     const m = new Modal({
@@ -550,14 +494,12 @@ const Orders = (() => {
     const searchEl     = document.getElementById('orders-search');
     const selectAll    = document.getElementById('orders-select-all');
     const deleteSelBtn = document.getElementById('orders-delete-selected');
-    const deleteOrdBtn = document.getElementById('orders-delete-filtered');
     const phantomCb    = document.getElementById('filter-phantom');
 
     if (applyBtn)     applyBtn.addEventListener('click',     () => { _collectFilters(); _page = 1; load(); });
     if (resetBtn)     resetBtn.addEventListener('click',     _resetFilters);
     if (exportBtn)    exportBtn.addEventListener('click',    _openExportModal);
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
-    if (deleteOrdBtn) deleteOrdBtn.addEventListener('click', _deleteOrders);
     if (phantomCb)    phantomCb.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
 
     if (selectAll) {
