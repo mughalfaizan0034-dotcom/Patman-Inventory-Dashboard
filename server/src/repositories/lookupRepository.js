@@ -8,14 +8,16 @@ export function createLookupRepository({ bq, projectId }) {
     const q = (query || '').trim();
     if (!q) return [];
 
-    // Aggregate inventory by SKU first so that multiple rows for the same SKU
-    // (valid when 1 physical unit = 1 row) are summed before joining with orders.
-    // Without this, a SKU with N rows joins once per row to the same ord_summary
-    // entry, multiplying units_sold by N and producing wrong remaining counts.
+    // Two-stage aggregation:
+    // 1. inv_grouped: SUM quantities by (box, part, upc) — handles N rows per box.
+    // 2. inv_skus: collect ALL distinct skus per (box, part, upc) — a box may have
+    //    rows with different sku strings (different uploads / replenishment batches).
+    // 3. box_orders: join EVERY sku for each box against orders, then SUM per box —
+    //    ensures sold counts cover all sku variants, not just MIN(sku).
+    // 4. Final join: merge aggregated initial stock with aggregated sold quantity.
     const sql = `
       WITH inv_grouped AS (
         SELECT
-          MIN(sku)                  AS sku,
           COALESCE(upc, '')         AS upc,
           COALESCE(part_number, '') AS part_number,
           COALESCE(box_number, '')  AS box_number,
@@ -27,6 +29,19 @@ export function createLookupRepository({ bq, projectId }) {
             OR LOWER(TRIM(COALESCE(part_number, ''))) = LOWER(TRIM(@query))
           )
         GROUP BY COALESCE(box_number, ''), COALESCE(part_number, ''), COALESCE(upc, '')
+      ),
+      inv_skus AS (
+        SELECT DISTINCT
+          COALESCE(upc, '')         AS upc,
+          COALESCE(part_number, '') AS part_number,
+          COALESCE(box_number, '')  AS box_number,
+          sku
+        FROM ${invTable}
+        WHERE organization_id = @organizationId
+          AND (
+            LOWER(TRIM(COALESCE(upc, '')))            = LOWER(TRIM(@query))
+            OR LOWER(TRIM(COALESCE(part_number, ''))) = LOWER(TRIM(@query))
+          )
       ),
       ord_summary AS (
         SELECT
@@ -41,17 +56,27 @@ export function createLookupRepository({ bq, projectId }) {
         FROM ${ordTable}
         WHERE organization_id = @organizationId
         GROUP BY effective_sku
+      ),
+      box_orders AS (
+        SELECT
+          s.upc, s.part_number, s.box_number,
+          COALESCE(SUM(o.units_sold), 0) AS units_sold
+        FROM inv_skus s
+        LEFT JOIN ord_summary o ON s.sku = o.effective_sku
+        GROUP BY s.upc, s.part_number, s.box_number
       )
       SELECT
-        ig.sku,
         ig.upc,
         ig.part_number,
         ig.box_number,
         ig.initial_stock,
-        COALESCE(o.units_sold, 0)                AS units_sold,
-        ig.initial_stock - COALESCE(o.units_sold, 0) AS remaining_stock
+        COALESCE(bo.units_sold, 0)                    AS units_sold,
+        ig.initial_stock - COALESCE(bo.units_sold, 0) AS remaining_stock
       FROM inv_grouped ig
-      LEFT JOIN ord_summary o ON ig.sku = o.effective_sku
+      LEFT JOIN box_orders bo
+        ON  ig.box_number   = bo.box_number
+        AND ig.part_number  = bo.part_number
+        AND ig.upc          = bo.upc
       ORDER BY ig.part_number, ig.upc, remaining_stock DESC
     `;
 

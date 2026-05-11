@@ -65,15 +65,25 @@ const BoxLookup = (() => {
       </tr>`;
   }
 
-  /* ── Deduplicate boxes by box_number|part_number|upc ────── */
-  function _dedup(boxes) {
-    const seen = new Set();
-    return (boxes || []).filter(b => {
+  /* ── Merge boxes with same (box_number, part_number, upc) ── */
+  function _mergeByBox(boxes) {
+    const map = new Map();
+    for (const b of (boxes || [])) {
       const key = `${b.box_number}|${b.part_number}|${b.upc}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+      if (map.has(key)) {
+        const m = map.get(key);
+        m.initial_stock  += Number(b.initial_stock  ?? 0);
+        m.units_sold     += Number(b.units_sold      ?? 0);
+        m.remaining_stock = m.initial_stock - m.units_sold;
+      } else {
+        map.set(key, { ...b,
+          initial_stock:   Number(b.initial_stock   ?? 0),
+          units_sold:      Number(b.units_sold       ?? 0),
+          remaining_stock: Number(b.remaining_stock  ?? 0),
+        });
+      }
+    }
+    return Array.from(map.values());
   }
 
   /* ── Render one UPC block (summary card + box table) ─────── */
@@ -114,7 +124,7 @@ const BoxLookup = (() => {
       const upcBlocks = [];
 
       for (const sub of subSections) {
-        const allBoxes       = _dedup(sub.boxes);
+        const allBoxes       = _mergeByBox(sub.boxes);
         const totalInitial   = allBoxes.reduce((s, b) => s + Number(b.initial_stock   ?? 0), 0);
         const totalSold      = allBoxes.reduce((s, b) => s + Number(b.units_sold       ?? 0), 0);
         const totalRemaining = allBoxes.reduce((s, b) => s + Number(b.remaining_stock  ?? 0), 0);
