@@ -98,8 +98,8 @@ const Orders = (() => {
       const shipped    = row.shipped_from_box || '';
       const isOverride = !!(shipped && shipped !== origBox);
       const shippedHtml = isOverride
-        ? `${Utils.escapeHtml(shipped)}<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Override</span>`
-        : `<span style="color:var(--primary);font-weight:600">★ ${Utils.escapeHtml(origBox || '—')}</span>`;
+        ? `<span style="font-weight:500">${Utils.escapeHtml(shipped)}</span><span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Override</span><button class="order-edit-btn" style="background:none;border:none;opacity:.45;font-size:11px;padding:0 3px;margin-left:4px;cursor:pointer;vertical-align:middle" title="Change fulfillment box">✏️</button>`
+        : `<span class="order-edit-btn" style="display:inline-flex;align-items:center;gap:3px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer" title="Click to change fulfillment box">★ ${Utils.escapeHtml(origBox || '—')}</span>`;
       return `<tr data-row-id="${Utils.escapeHtml(id)}"
                   data-order-date="${Utils.escapeHtml(row.order_date || '')}"
                   data-sku="${Utils.escapeHtml(row.sku || '')}"
@@ -113,7 +113,7 @@ const Orders = (() => {
         <td style="font-weight:500">${Utils.escapeHtml(row.sku || '-')}</td>
         <td class="num"><strong>${Utils.formatNumber(row.quantity_sold)}</strong></td>
         <td class="shipped-cell" style="white-space:nowrap">
-          ${shippedHtml}<button class="btn btn-ghost btn-icon btn-sm order-edit-btn" title="Change shipped from box" style="opacity:.45;font-size:11px;padding:0 3px;margin-left:5px;vertical-align:middle">✏️</button>
+          ${shippedHtml}
         </td>
         <td>${_platformBadge(row.platform)}</td>
       </tr>`;
