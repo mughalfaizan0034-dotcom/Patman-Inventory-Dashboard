@@ -176,75 +176,144 @@ const Orders = (() => {
     _updateDeleteBtn();
   }
 
-  /* ── Inline box select (in shipped-from-box cell) ───────── */
-  function _restoreShippedCell(cell, boxValue) {
-    const origBox  = _parseSku(cell.closest('tr')?.dataset.sku || '')?.box || '';
-    const shipped  = boxValue || '';
-    const isOverride = !!(shipped && shipped !== origBox);
+  /* ── Fulfillment box popover ─────────────────────────────── */
+  let _activePopover    = null;
+  let _popoverListeners = { outside: null, keydown: null };
 
-    cell.innerHTML = '';
-    const span = document.createElement('span');
+  function _closeBoxPopover() {
+    if (_activePopover) { _activePopover.remove(); _activePopover = null; }
+    if (_popoverListeners.outside) { document.removeEventListener('mousedown', _popoverListeners.outside); _popoverListeners.outside = null; }
+    if (_popoverListeners.keydown) { document.removeEventListener('keydown',   _popoverListeners.keydown);  _popoverListeners.keydown  = null; }
+  }
+
+  function _restoreShippedCell(cell, boxValue) {
+    const origBox    = _parseSku(cell.closest('tr')?.dataset.sku || '')?.box || '';
+    const shipped    = boxValue || '';
+    const isOverride = !!(shipped && shipped !== origBox);
+    cell.innerHTML   = '';
 
     if (isOverride) {
-      span.textContent = shipped;
+      const text = document.createElement('span');
+      text.style.fontWeight = '500';
+      text.textContent = shipped;
       const badge = document.createElement('span');
       badge.textContent = 'Override';
       badge.style.cssText = 'font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle';
-      span.appendChild(badge);
+      const btn = document.createElement('button');
+      btn.style.cssText = 'background:none;border:none;opacity:.45;font-size:11px;padding:0 3px;margin-left:4px;cursor:pointer;vertical-align:middle';
+      btn.title = 'Change fulfillment box';
+      btn.textContent = '✏️';
+      btn.addEventListener('click', e => { e.stopPropagation(); _openInlineBoxSelector(cell.closest('tr')); });
+      text.appendChild(badge);
+      cell.appendChild(text);
+      cell.appendChild(btn);
     } else {
-      span.textContent = origBox ? `★ ${origBox}` : '—';
-      span.style.cssText = 'color:var(--primary);font-weight:600';
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer';
+      chip.title = 'Click to change fulfillment box';
+      chip.textContent = origBox ? `★ ${origBox}` : '—';
+      chip.addEventListener('click', e => { e.stopPropagation(); _openInlineBoxSelector(cell.closest('tr')); });
+      cell.appendChild(chip);
     }
-
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-ghost btn-icon btn-sm order-edit-btn';
-    btn.title = 'Change shipped from box';
-    btn.style.cssText = 'opacity:.45;font-size:11px;padding:0 3px;margin-left:5px;vertical-align:middle';
-    btn.textContent = '✏️';
-    btn.addEventListener('click', e => { e.stopPropagation(); _openInlineBoxSelector(cell.closest('tr')); });
-    cell.appendChild(span);
-    cell.appendChild(btn);
   }
 
-  function _showBoxSelect(cell, options, selectedBox, disabled, placeholder, onChange) {
-    cell.innerHTML = '';
-    const select = document.createElement('select');
-    select.className = 'box-select';
-    select.style.cssText = 'max-width:220px;height:28px;font-size:12px;border:1.5px solid var(--primary);border-radius:4px;background:#fff;color:var(--txt-1);padding:0 6px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';outline:none;vertical-align:middle';
-    select.disabled = disabled;
+  function _showBoxPopover(cell, allOptions, pendingBoxInit, onConfirm) {
+    _closeBoxPopover();
+    let pendingBox = pendingBoxInit;
+    const orig = allOptions.find(o => o.isOriginal);
+    const alts = allOptions.filter(o => !o.isOriginal);
 
-    if (!options.length) {
-      const opt = document.createElement('option');
-      opt.textContent = placeholder || '—';
-      select.appendChild(opt);
-    } else {
-      options.forEach(opt => {
-        const el = document.createElement('option');
-        el.value = opt.box_number;
-        if (opt.isOriginal) {
-          el.textContent = `★ Box ${opt.box_number} (Original) • Qty ${opt.remaining_stock}`;
-          el.style.backgroundColor = '#dbeafe';
-          el.style.fontWeight = 'bold';
-          el.style.color = '#1d4ed8';
-        } else {
-          el.textContent = `Box ${opt.box_number} • Qty ${opt.remaining_stock}`;
-        }
-        if (opt.box_number === selectedBox) el.selected = true;
-        select.appendChild(el);
-      });
+    const pop = document.createElement('div');
+    pop.style.cssText = 'position:fixed;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.13),0 2px 8px rgba(0,0,0,.07);width:272px;display:flex;flex-direction:column;z-index:10001;font-family:inherit;font-size:13px;overflow:hidden';
+
+    const rect = cell.getBoundingClientRect();
+    pop.style.top  = (rect.bottom + 6) + 'px';
+    pop.style.left = Math.min(rect.left, window.innerWidth - 284) + 'px';
+
+    function _makeOptEl(opt) {
+      const isSel = opt.box_number === pendingBox;
+      const el = document.createElement('div');
+      el.style.cssText = [
+        'display:flex;justify-content:space-between;align-items:center',
+        'padding:8px 10px;border-radius:7px;cursor:pointer;margin-bottom:2px;transition:background .1s',
+        opt.isOriginal
+          ? (isSel ? 'background:#dbeafe;border:1.5px solid #93c5fd' : 'background:#eff6ff;border:1.5px solid #bfdbfe')
+          : (isSel ? 'background:#e0e7ff;border:1.5px solid #a5b4fc' : 'background:transparent;border:1.5px solid transparent'),
+      ].join(';');
+
+      const nameEl = document.createElement('span');
+      nameEl.style.cssText = opt.isOriginal ? 'font-weight:700;color:#1d4ed8'
+        : isSel ? 'font-weight:600;color:#3730a3' : 'font-weight:500;color:#1e293b';
+      nameEl.textContent = opt.isOriginal ? `★ Box ${opt.box_number} (Original)` : `Box ${opt.box_number}`;
+
+      const qtyEl = document.createElement('span');
+      qtyEl.style.cssText = 'font-size:12px;color:' + (opt.isOriginal ? '#3b82f6' : isSel ? '#6366f1' : '#64748b');
+      qtyEl.textContent = `Qty ${opt.remaining_stock}`;
+
+      el.appendChild(nameEl);
+      el.appendChild(qtyEl);
+      el.addEventListener('mouseenter', () => { if (opt.box_number !== pendingBox) el.style.background = opt.isOriginal ? '#dbeafe' : '#f8fafc'; });
+      el.addEventListener('mouseleave', () => { if (opt.box_number !== pendingBox) el.style.background = opt.isOriginal ? '#eff6ff' : 'transparent'; });
+      el.addEventListener('click', () => { pendingBox = opt.box_number; _render(); });
+      return el;
     }
 
-    cell.appendChild(select);
+    function _render() {
+      pop.innerHTML = '';
 
-    if (!disabled && onChange) {
-      select.addEventListener('change', () => onChange(select.value));
-      select.addEventListener('keydown', e => {
-        if (e.key === 'Escape') {
-          e.preventDefault(); e.stopPropagation();
-          _restoreShippedCell(cell, cell.closest('tr')?.dataset.shipped || '');
-        }
-      });
+      // Original section
+      const origSect = document.createElement('div');
+      origSect.style.cssText = 'padding:10px 12px 8px;border-bottom:1px solid #f1f5f9';
+      const origLbl = document.createElement('div');
+      origLbl.style.cssText = 'font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px';
+      origLbl.textContent = 'Original Box';
+      origSect.appendChild(origLbl);
+      if (orig) origSect.appendChild(_makeOptEl(orig));
+      pop.appendChild(origSect);
+
+      // Alternatives section
+      const altSect = document.createElement('div');
+      altSect.style.cssText = 'padding:10px 12px 8px;overflow-y:auto;max-height:210px';
+      const altLbl = document.createElement('div');
+      altLbl.style.cssText = 'font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px';
+      altLbl.textContent = 'Alternative In-Stock Boxes';
+      altSect.appendChild(altLbl);
+      if (alts.length) {
+        alts.forEach(a => altSect.appendChild(_makeOptEl(a)));
+      } else {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'color:#94a3b8;font-size:12px;text-align:center;padding:10px 0';
+        empty.textContent = 'No alternative in-stock boxes';
+        altSect.appendChild(empty);
+      }
+      pop.appendChild(altSect);
+
+      // Footer
+      const footer = document.createElement('div');
+      footer.style.cssText = 'padding:10px 12px;border-top:1px solid #f1f5f9;display:flex;gap:8px;justify-content:flex-end;background:#f8fafc';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-secondary btn-sm';
+      cancelBtn.style.fontSize = '12px';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', e => { e.stopPropagation(); _closeBoxPopover(); });
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'btn btn-primary btn-sm';
+      confirmBtn.style.fontSize = '12px';
+      confirmBtn.textContent = 'Confirm';
+      confirmBtn.addEventListener('click', e => { e.stopPropagation(); _closeBoxPopover(); onConfirm(pendingBox); });
+      footer.appendChild(cancelBtn);
+      footer.appendChild(confirmBtn);
+      pop.appendChild(footer);
     }
+
+    _render();
+    document.body.appendChild(pop);
+    _activePopover = pop;
+
+    _popoverListeners.outside = e => { if (!pop.contains(e.target) && !cell.contains(e.target)) _closeBoxPopover(); };
+    setTimeout(() => document.addEventListener('mousedown', _popoverListeners.outside), 0);
+    _popoverListeners.keydown = e => { if (e.key === 'Escape') { e.preventDefault(); _closeBoxPopover(); } };
+    document.addEventListener('keydown', _popoverListeners.keydown);
   }
 
   async function _openInlineBoxSelector(tr) {
@@ -255,54 +324,37 @@ const Orders = (() => {
     const cell       = tr.querySelector('td.shipped-cell');
     if (!cell) return;
 
-    // Toggle off if already showing
-    if (cell.querySelector('select.box-select')) {
-      _restoreShippedCell(cell, currentBox);
-      return;
-    }
+    // Toggle: clicking chip/button while popover is open for same row closes it
+    if (_activePopover?.dataset?.rowId === rowId) { _closeBoxPopover(); return; }
+    _closeBoxPopover();
 
-    // Close any other open selects
-    document.querySelectorAll('td.shipped-cell').forEach(c => {
-      if (c !== cell && c.querySelector('select.box-select')) {
-        _restoreShippedCell(c, c.closest('tr')?.dataset.shipped || '');
-      }
-    });
+    if (!parsed) { Notify.warning('Cannot edit', 'SKU format not recognized'); return; }
 
-    if (!parsed) {
-      _showBoxSelect(cell, [], '', true, 'Invalid SKU');
-      return;
-    }
-
-    _showBoxSelect(cell, [], '', true, 'Loading…');
+    // Dim cell while loading
+    const trigger = cell.firstElementChild;
+    if (trigger) { trigger.style.opacity = '0.5'; trigger.style.pointerEvents = 'none'; }
 
     try {
       const result = await API.getInventoryAlternatives(sku);
       const { originalBox, alternatives } = result || {};
       const effectiveOrigBox = originalBox || parsed.box;
 
-      // Original box is ALWAYS first, even if OOS
-      const origData = (alternatives || []).find(a => a.box_number === effectiveOrigBox);
+      const origData   = (alternatives || []).find(a => a.box_number === effectiveOrigBox);
       const allOptions = [
-        {
-          box_number:      effectiveOrigBox,
-          remaining_stock: origData?.remaining_stock ?? 0,
-          isOriginal:      true,
-        },
+        { box_number: effectiveOrigBox, remaining_stock: origData?.remaining_stock ?? 0, isOriginal: true },
         ...(alternatives || [])
           .filter(a => a.box_number !== effectiveOrigBox && a.remaining_stock > 0)
           .sort((a, b) => b.remaining_stock - a.remaining_stock)
           .map(a => ({ ...a, isOriginal: false })),
       ];
 
-      // Pre-select: current override, or the original box if no override
-      const selectedDisplay = currentBox || effectiveOrigBox;
+      if (trigger) { trigger.style.opacity = ''; trigger.style.pointerEvents = ''; }
 
-      _showBoxSelect(cell, allOptions, selectedDisplay, false, null, async selectedBox => {
+      _showBoxPopover(cell, allOptions, currentBox || effectiveOrigBox, async selectedBox => {
         const isOriginalSelected = selectedBox === effectiveOrigBox;
-        // Save '' (empty string) to clear override back to original; backend converts '' → NULL
-        const newShipped  = isOriginalSelected ? '' : selectedBox;
-        const prevLabel   = currentBox && currentBox !== effectiveOrigBox ? currentBox : `★ ${effectiveOrigBox}`;
-        const nextLabel   = isOriginalSelected ? `★ ${effectiveOrigBox} (Original)` : selectedBox;
+        const newShipped = isOriginalSelected ? '' : selectedBox;
+        const prevLabel  = currentBox && currentBox !== effectiveOrigBox ? currentBox : `★ ${effectiveOrigBox}`;
+        const nextLabel  = isOriginalSelected ? `★ ${effectiveOrigBox} (Original)` : selectedBox;
 
         _restoreShippedCell(cell, newShipped);
         try {
@@ -319,8 +371,12 @@ const Orders = (() => {
           _restoreShippedCell(cell, currentBox);
         }
       });
+
+      if (_activePopover) _activePopover.dataset.rowId = rowId;
+
     } catch {
-      _showBoxSelect(cell, [], '', true, 'Load failed');
+      if (trigger) { trigger.style.opacity = ''; trigger.style.pointerEvents = ''; }
+      Notify.error('Failed', 'Could not load box alternatives');
     }
   }
 
