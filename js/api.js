@@ -39,7 +39,13 @@ const API = (() => {
         sessionStorage.setItem(CONFIG.SESSION_KEY, data.access_token);
         if (data.refresh_token) sessionStorage.setItem('patman_refresh_token', data.refresh_token);
       })
-      .catch(err => { _forceLogout(); throw err; })
+      .catch(err => {
+        // Only force-logout on 401 (token invalid, user inactive).
+        // 503/500/network errors = server issue — keep session so the user is not
+        // ejected due to a backend outage or a missing BigQuery table.
+        if (!err.status || err.status === 401) _forceLogout();
+        throw err;
+      })
       .finally(() => { _refreshPromise = null; });
     return _refreshPromise;
   }

@@ -552,8 +552,10 @@ const App = (() => {
 
     const ok = await Auth.checkSession();
     if (ok) {
+      console.log('[AUTH] app initialized');
       showApp();
     } else {
+      console.log('[AUTH] redirecting to login');
       showLogin();
     }
   }

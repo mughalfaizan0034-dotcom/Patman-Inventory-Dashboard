@@ -98,6 +98,8 @@ export async function buildApp() {
   fastify.register(bigqueryPlugin);
 
   fastify.after(() => {
+    fastify.log.info('[BOOT] after() entered — building repos and services');
+
     const deps = { bq: fastify.bq, projectId: env.GCP_PROJECT_ID };
 
     // Repositories
@@ -120,6 +122,7 @@ export async function buildApp() {
 
     const tokenFactory = createTokenFactory(fastify);
 
+    fastify.log.info('[BOOT] registering routes');
     fastify.register(healthRoutes);
     fastify.register(authRoutes,          { prefix: '/auth',          authService, usersRepo, membershipsRepo, tokenFactory });
     fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService });
@@ -129,8 +132,8 @@ export async function buildApp() {
     fastify.register(usersRoutes,         { prefix: '/users',         usersService });
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
     fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo });
+    fastify.log.info('[BOOT] all route plugins registered');
 
-    // Temporary debug endpoint — remove after deployment is verified.
     // Enable with: DEBUG_ROUTES=true in Cloud Run env vars.
     if (process.env.DEBUG_ROUTES === 'true') {
       fastify.get('/debug/routes', async () => ({ routes: fastify.printRoutes({ commonPrefix: false }) }));

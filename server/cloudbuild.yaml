@@ -42,7 +42,7 @@ steps:
       # Uncomment after creating the dedicated service account:
       # - --service-account=patman-api@$PROJECT_ID.iam.gserviceaccount.com
       - --set-secrets=JWT_SECRET=patman-jwt-secret:latest
-      - --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,CORS_ORIGIN=https://mughalfaizan0034-dotcom.github.io,NODE_ENV=production,LOG_LEVEL=info
+      - --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,CORS_ORIGIN=https://mughalfaizan0034-dotcom.github.io,NODE_ENV=production,LOG_LEVEL=info,DEBUG_ROUTES=true
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest

@@ -7,13 +7,15 @@ export function createTokenFactory(fastify) {
     signAccessToken(membership) {
       return fastify.jwt.sign(
         {
-          user_id:         membership.user_id,
-          organization_id: membership.organization_id,
-          membership_id:   membership.membership_id,
-          username:        membership.username,
-          display_name:    membership.display_name,
-          role:            membership.role,
-          type:            'access',
+          user_id:          membership.user_id,
+          organization_id:  membership.organization_id,
+          membership_id:    membership.membership_id,
+          username:         membership.username,
+          display_name:     membership.display_name,
+          role:             membership.role,
+          org_display_name: membership.org_display_name || '',
+          org_slug:         membership.org_slug         || '',
+          type:             'access',
         },
         { expiresIn: env.JWT_ACCESS_EXPIRES }
       );

@@ -64,8 +64,8 @@ const Auth = (() => {
           organization_id: p.organization_id,
           membership_id:   p.membership_id,
           role:            p.role,
-          display_name:    p.display_name || '—',
-          slug:            p.slug || '',
+          display_name:    p.org_display_name || '—',
+          slug:            p.org_slug || '',
         };
         sessionStorage.setItem(CONFIG.ORG_KEY, JSON.stringify(o));
         return o;
@@ -293,23 +293,29 @@ const Auth = (() => {
 
   /* ── Session verification on page load ──────────────────── */
   async function checkSession() {
+    console.log('[AUTH] restore started');
     const token = getToken();
-    if (!token) return false;
+    if (!token) { console.log('[AUTH] no token — showing login'); return false; }
+    console.log('[AUTH] token restored');
 
     const expMs = _tokenExpiresAt(token);
     const now   = Date.now();
 
     if (expMs && now >= expMs) {
       // Token is expired. Attempt refresh.
+      console.log('[AUTH] token expired — attempting refresh');
       const storedRefresh = sessionStorage.getItem(REFRESH_KEY);
-      if (!storedRefresh) { clearSession(); return false; }
+      if (!storedRefresh) { console.log('[AUTH] no refresh token — clearing session'); clearSession(); return false; }
       try {
         const data = await API.refreshToken(storedRefresh, _getMembershipId());
         saveSession(data.access_token, getUser(), getOrganization(), data.refresh_token, getMemberships());
+        console.log('[AUTH] token refreshed');
       } catch (err) {
         // 401 = actual auth failure (bad token, inactive user) → must logout.
         // 500/503/network = server issue → keep session; API calls will retry refresh.
+        console.warn('[AUTH] refresh failed', err.status, err.message);
         if (err.status === 401 || !err.status) { clearSession(); return false; }
+        // On 503/500: keep existing token and continue — app will show errors on API calls
       }
     } else if (expMs && expMs - now < 2 * 60 * 1000) {
       // Token expiring soon — proactive refresh, non-critical.
@@ -321,7 +327,15 @@ const Auth = (() => {
       }
     }
 
-    return !!(getUser() && getOrganization());
+    const user = getUser();
+    const org  = getOrganization();
+    console.log('[AUTH] memberships restored:', getMemberships().length, 'entries');
+    console.log('[AUTH] active org restored:', org?.organization_id, org?.role);
+    console.log('[AUTH] user restored:', user?.user_id, user?.username);
+
+    const ok = !!(user && org);
+    console.log('[AUTH] validation', ok ? 'success' : 'FAILED — missing user or org');
+    return ok;
   }
 
   /* ── Role-gate UI elements ─────────────────────────────────── */
