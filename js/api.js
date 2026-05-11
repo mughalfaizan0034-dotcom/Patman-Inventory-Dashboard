@@ -248,6 +248,7 @@ const API = (() => {
     /* Dashboard */
     async getDashboardKPIs()                        { return _crGet('/dashboard/kpis'); },
     async getPerformanceData(weeks=12, platform='') { return _crGet('/dashboard/performance', { weeks, ...(platform ? { platform } : {}) }); },
+    async getInventoryAnalytics()                   { return _crGet('/dashboard/inventory-analytics'); },
 
     /* Lookup */
     async lookup(query) { return _crGet('/lookup', { query }); },

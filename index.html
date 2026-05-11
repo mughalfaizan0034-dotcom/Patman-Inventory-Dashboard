@@ -182,26 +182,26 @@
           </div>
 
           <div id="perf-container" style="position:relative">
+
+            <!-- Weekly Sales — full width -->
             <div class="card" style="margin-bottom:16px">
               <div class="card-header"><div class="card-title">Weekly Sales</div></div>
               <div class="chart-wrap"><canvas id="chart-weekly"></canvas></div>
             </div>
 
-            <div class="chart-grid" style="margin-bottom:16px">
-              <div class="card">
-                <div class="card-header"><div class="card-title">Sales by Platform</div></div>
-                <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-                  <div style="flex:1;min-width:180px;height:220px"><canvas id="chart-platform"></canvas></div>
-                  <div id="platform-legend" style="flex:1;min-width:140px"></div>
+            <!-- Sales by Platform — full width, no duplicate legend -->
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header"><div class="card-title">Sales by Platform</div></div>
+              <div style="display:flex;align-items:center;gap:40px;padding:8px 4px 16px">
+                <div style="flex:0 0 230px;height:230px">
+                  <canvas id="chart-platform"></canvas>
                 </div>
-              </div>
-              <div class="card">
-                <div class="card-header"><div class="card-title">Top SKUs</div></div>
-                <div id="top-skus-list"></div>
+                <div id="platform-legend" style="flex:1;min-width:0"></div>
               </div>
             </div>
 
-            <div class="card card-table">
+            <!-- Monthly Summary — full width -->
+            <div class="card card-table" style="margin-bottom:32px">
               <div class="card-header" style="padding:16px 20px 0">
                 <div class="card-title">Monthly Summary</div>
               </div>
@@ -219,6 +219,66 @@
                 </table>
               </div>
             </div>
+
+            <!-- ── Inventory Intelligence ───────────────────────────── -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--border)">
+              <span style="font-size:20px">🏭</span>
+              <div style="font-size:17px;font-weight:700;color:var(--txt-1);letter-spacing:-.01em">Inventory Intelligence</div>
+            </div>
+
+            <!-- Row 1: Stock Status + Top Boxes -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+              <div class="card">
+                <div class="card-header"><div class="card-title">Stock Status</div></div>
+                <div style="display:flex;align-items:center;gap:28px;padding:8px 0 16px">
+                  <div style="flex:0 0 190px;height:190px">
+                    <canvas id="chart-stock-status"></canvas>
+                  </div>
+                  <div id="stock-status-legend" style="flex:1;min-width:0"></div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-header"><div class="card-title">Top Boxes by Remaining Units</div></div>
+                <div style="height:260px;padding:8px 0">
+                  <canvas id="chart-top-boxes"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Stock Health by Acquisition Month — full width -->
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header"><div class="card-title">Stock Health by Acquisition Month</div></div>
+              <div class="chart-wrap"><canvas id="chart-health-month"></canvas></div>
+            </div>
+
+            <!-- Row 3: Most Oversold SKUs + Box Utilization -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+              <div class="card card-table">
+                <div class="card-header" style="padding:16px 20px 0">
+                  <div class="card-title">Most Oversold SKUs</div>
+                </div>
+                <div class="table-wrap" style="border:none;margin-top:12px">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th class="num">Original</th>
+                        <th class="num">Sold</th>
+                        <th class="num" style="color:var(--error)">Remaining</th>
+                      </tr>
+                    </thead>
+                    <tbody id="oversold-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-header"><div class="card-title">Boxes with Most Active SKUs</div></div>
+                <div style="height:300px;padding:8px 0">
+                  <canvas id="chart-box-util"></canvas>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 

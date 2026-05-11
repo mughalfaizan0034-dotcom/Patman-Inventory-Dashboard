@@ -22,4 +22,14 @@ export async function dashboardRoutes(fastify, { dashboardService }) {
       return reply.code(500).send({ success: false, error: 'Internal server error' });
     }
   });
+
+  fastify.get('/inventory-analytics', { preHandler: [authenticate] }, async (request, reply) => {
+    try {
+      const data = await dashboardService.getInventoryAnalytics(request.user.organization_id);
+      return reply.send({ success: true, data });
+    } catch (err) {
+      request.log.error({ err }, 'Inventory analytics error');
+      return reply.code(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
 }

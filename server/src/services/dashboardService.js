@@ -37,14 +37,48 @@ export function createDashboardService({ dashboardRepo }) {
         units_sold: Number(r.units_sold ?? 0),
       })),
       monthly: monthly.map(r => ({
-        month:       r.month,
-        month_label: monthLabel(r.month),
-        order_count: Number(r.order_count ?? 0),
-        units_sold:  Number(r.units_sold  ?? 0),
+        month:        r.month,
+        month_label:  monthLabel(r.month),
+        order_count:  Number(r.order_count ?? 0),
+        units_sold:   Number(r.units_sold  ?? 0),
         top_platform: r.top_platform ?? '—',
       })),
     };
   }
 
-  return { getKPIs, getPerformance };
+  async function getInventoryAnalytics(organizationId) {
+    const raw = await dashboardRepo.getInventoryAnalytics(organizationId);
+
+    return {
+      stockStatus: raw.stockStatus.map(r => ({
+        status: r.status,
+        count:  Number(r.count ?? 0),
+      })),
+      topBoxes: raw.topBoxes.map(r => ({
+        box_number:      r.box_number,
+        remaining_units: Number(r.remaining_units ?? 0),
+        sku_count:       Number(r.sku_count       ?? 0),
+      })),
+      healthByMonth: raw.healthByMonth.map(r => ({
+        month:    r.month,
+        in_stock: Number(r.in_stock ?? 0),
+        oos:      Number(r.oos      ?? 0),
+        phantom:  Number(r.phantom  ?? 0),
+        total:    Number(r.total    ?? 0),
+      })),
+      mostOversoldSkus: raw.mostOversoldSkus.map(r => ({
+        sku:          r.sku,
+        original_qty: Number(r.original_qty ?? 0),
+        units_sold:   Number(r.units_sold   ?? 0),
+        remaining:    Number(r.remaining    ?? 0),
+      })),
+      boxUtilization: raw.boxUtilization.map(r => ({
+        box_number:  r.box_number,
+        total_skus:  Number(r.total_skus  ?? 0),
+        active_skus: Number(r.active_skus ?? 0),
+      })),
+    };
+  }
+
+  return { getKPIs, getPerformance, getInventoryAnalytics };
 }
