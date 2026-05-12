@@ -361,7 +361,11 @@ const Orders = (() => {
         ...(alternatives || [])
           .filter(a => a.box_number !== effectiveOrigBox && a.remaining_stock > 0)
           .sort((a, b) => b.remaining_stock - a.remaining_stock)
-          .map(a => ({ ...a, isOriginal: false })),
+          .map(a => ({
+            ...a,
+            effective_sku: a.effective_sku || _getEffectiveSku(sku, a.box_number) || a.sku || `Box ${a.box_number}`,
+            isOriginal: false,
+          })),
       ];
 
       if (trigger) { trigger.style.opacity = ''; trigger.style.pointerEvents = ''; }
