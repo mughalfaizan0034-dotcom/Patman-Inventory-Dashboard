@@ -74,23 +74,32 @@ const BoxLookup = (() => {
   }
 
   /* ── Merge boxes with same (box_number, part_number, upc) ── */
+  // Normalizes values from both old backend (units_sold, negative remaining_stock)
+  // and new backend (fulfilled_units, phantom_units, GREATEST-capped remaining_stock).
+  // remaining_stock is always derived as MAX(initial - fulfilled, 0) — never negative.
   function _mergeByBox(boxes) {
     const map = new Map();
     for (const b of (boxes || [])) {
-      const key = `${b.box_number}|${b.part_number}|${b.upc}`;
+      const key     = `${b.box_number}|${b.part_number}|${b.upc}`;
+      const initial = Number(b.initial_stock ?? 0);
+      // Old backend: returns raw units_sold (may exceed initial); new backend: fulfilled_units/phantom_units
+      const rawOrdered = Number(b.units_sold ?? 0);
+      const fulfilled  = b.fulfilled_units != null
+        ? Number(b.fulfilled_units)
+        : Math.min(rawOrdered, initial);
+      const phantom    = b.phantom_units != null
+        ? Number(b.phantom_units)
+        : Math.max(rawOrdered - initial, 0);
+      const remaining  = Math.max(initial - fulfilled, 0);
+
       if (map.has(key)) {
         const m = map.get(key);
-        m.initial_stock   += Number(b.initial_stock   ?? 0);
-        m.fulfilled_units += Number(b.fulfilled_units  ?? 0);
-        m.phantom_units   += Number(b.phantom_units    ?? 0);
-        m.remaining_stock += Number(b.remaining_stock  ?? 0);
+        m.initial_stock   += initial;
+        m.fulfilled_units += fulfilled;
+        m.phantom_units   += phantom;
+        m.remaining_stock  = Math.max(m.initial_stock - m.fulfilled_units, 0);
       } else {
-        map.set(key, { ...b,
-          initial_stock:   Number(b.initial_stock   ?? 0),
-          fulfilled_units: Number(b.fulfilled_units  ?? 0),
-          phantom_units:   Number(b.phantom_units    ?? 0),
-          remaining_stock: Number(b.remaining_stock  ?? 0),
-        });
+        map.set(key, { ...b, initial_stock: initial, fulfilled_units: fulfilled, phantom_units: phantom, remaining_stock: remaining });
       }
     }
     return Array.from(map.values());
@@ -139,7 +148,7 @@ const BoxLookup = (() => {
         const totalInitial    = allBoxes.reduce((s, b) => s + Number(b.initial_stock   ?? 0), 0);
         const totalFulfilled  = allBoxes.reduce((s, b) => s + Number(b.fulfilled_units  ?? 0), 0);
         const totalPhantom    = allBoxes.reduce((s, b) => s + Number(b.phantom_units    ?? 0), 0);
-        const totalRemaining  = allBoxes.reduce((s, b) => s + Number(b.remaining_stock  ?? 0), 0);
+        const totalRemaining  = allBoxes.reduce((s, b) => s + Math.max(Number(b.remaining_stock ?? 0), 0), 0);
 
         // In Stock tab: show UPC if ANY individual box has remaining > 0
         const hasAnyInStock = allBoxes.some(b => Number(b.remaining_stock ?? 0) > 0);
