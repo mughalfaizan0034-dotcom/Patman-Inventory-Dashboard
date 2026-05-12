@@ -103,7 +103,8 @@ export async function uploadsRoutes(fastify, { uploadsService }) {
     }
   );
 
-  // Template downloads — return tab-delimited .txt with column headers.
+  // Template downloads — comma-separated .csv files for Excel/Sheets compatibility.
+  // Note: uploads must be tab-delimited .txt; templates are a separate format.
   fastify.get(
     '/template/:type',
     { preHandler: [authenticate] },
@@ -112,18 +113,18 @@ export async function uploadsRoutes(fastify, { uploadsService }) {
 
       const templates = {
         inventory: [
-          'action\tsku\tupc\tquantity\tpart_number\tbox_number\tdate_added\tnotes',
-          'Add\tSKU-001\t012345678901\t25\tPT-123\tBX-001\t2026-05-11\tSample item',
-          'Add\tSKU-002\t098765432109\t10\t\t\t2026-05-11\t',
-          'Update\tSKU-001\t\t30\t\t\t\t',
-          'Remove\tSKU-002\t\t\t\t\t\t',
+          'action,sku,upc,quantity,part_number,box_number,date_added,notes',
+          'Add,SKU-001,012345678901,25,PT-123,BX-001,2026-05-11,Sample item',
+          'Add,SKU-002,098765432109,10,,,2026-05-11,',
+          'Update,SKU-001,,30,,,,',
+          'Remove,SKU-002,,,,,, ',
         ].join('\r\n'),
         orders: [
-          'action\torder_id\torder_date\tsku\tquantity_sold\tplatform\tshipped_from_box',
-          'Add\t\t2026-05-11\tSKU-001\t2\tAmazon\tBX-001',
-          'Add\t\t2026-05-11\tSKU-002\t1\teBay\t',
-          'Update\tORD-UUID-HERE\t\t\t3\t\t',
-          'Remove\tORD-UUID-HERE\t\t\t\t\t',
+          'action,order_id,order_date,sku,quantity_sold,platform,shipped_from_box',
+          'Add,,2026-05-11,SKU-001,2,Amazon,BX-001',
+          'Add,,2026-05-11,SKU-002,1,eBay,',
+          'Update,ORD-UUID-HERE,,,3,,',
+          'Remove,ORD-UUID-HERE,,,,, ',
         ].join('\r\n'),
       };
 
