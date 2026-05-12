@@ -63,6 +63,10 @@
 .row-undef td:first-child { border-left: 3px solid var(--warning); }
 .row-error td:first-child { border-left: 3px solid var(--error);   }
 
+/* Phantom row — unified across all operational tables */
+.data-table tbody tr.row-phantom         { background: rgba(220, 38, 38, 0.05); }
+.data-table tbody tr.row-phantom:hover   { background: rgba(220, 38, 38, 0.09); }
+
 /* ── Compact card table (inside card with no extra border) ─── */
 .card-table .data-table thead th:first-child,
 .card-table .data-table tbody td:first-child { padding-left: 20px; }

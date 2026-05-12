@@ -54,9 +54,10 @@ const BoxLookup = (() => {
   /* ── Box-level table row ─────────────────────────────────── */
   function _boxRow(box) {
     const rem      = Number(box.remaining_stock ?? 0);
-    const rowBg    = rem < 0 ? 'background:rgba(220,38,38,.035)' : rem === 0 ? 'background:rgba(0,0,0,.02)' : '';
+    const rowClass = rem < 0 ? ' class="row-phantom"' : '';
+    const rowStyle = rem === 0 ? ' style="background:rgba(0,0,0,.02)"' : '';
     return `
-      <tr style="${rowBg}">
+      <tr${rowClass}${rowStyle}>
         <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(box.box_number || '—')}</td>
         <td class="num">${Utils.formatNumber(box.initial_stock)}</td>
         <td class="num">${Utils.formatNumber(box.units_sold)}</td>
@@ -358,9 +359,8 @@ const InventoryList = (() => {
 
       const isUndef    = _isUndefined(item.sku) || _isUndefined(item.upc) || _isUndefined(item.part_number);
       const isPhantom  = remaining < 0;
-      const undefBadge    = isUndef   ? ` <span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
-      const phantomBadge  = isPhantom ? ` <span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">PHANTOM</span>` : '';
-      const rowBg      = isUndef ? ' style="background:rgba(234,179,8,.06)"' : isPhantom ? ' style="background:rgba(234,88,12,.04)"' : '';
+      const undefBadge = isUndef ? ` <span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
+      const rowBg      = isUndef ? ' style="background:rgba(234,179,8,.06)"' : isPhantom ? ' class="row-phantom"' : '';
 
       return `<tr data-sku="${Utils.escapeHtml(item.sku || '')}"
                   data-upc="${Utils.escapeHtml(item.upc || '')}"
@@ -372,7 +372,7 @@ const InventoryList = (() => {
         <td style="width:36px;text-align:center;padding:0 4px">
           <input type="checkbox" class="inv-row-cb" data-sku="${Utils.escapeHtml(item.sku || '')}"${checked} style="cursor:pointer">
         </td>
-        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}${phantomBadge}</td>
+        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}</td>
         <td>${Utils.escapeHtml(item.box_number || '—')}</td>
         <td>${Utils.escapeHtml(item.part_number || '—')}</td>
         <td>${Utils.escapeHtml(item.upc || '—')}</td>

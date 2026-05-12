@@ -92,7 +92,7 @@ const Orders = (() => {
     tbody.innerHTML = rows.map(row => {
       const id         = row.order_row_id || '';
       const checked    = _selectedIds.has(id) ? ' checked' : '';
-      const trStyle    = isPhantom ? ' style="background:rgba(220,38,38,.06)"' : '';
+      const trStyle    = isPhantom ? ' class="row-phantom"' : '';
       const parsedSku  = _parseSku(row.sku || '');
       const origBox    = parsedSku?.box || '';
       const shipped    = row.shipped_from_box || '';
