@@ -258,7 +258,7 @@
   animation: fadeIn .18s var(--ease);
 }
 /* Standard pages scroll with padding — excludes pages with custom internal layout */
-.page.active:not(#page-dashboard):not(#page-box-lookup):not(#page-uploads):not(#page-settings) {
+.page.active:not(#page-dashboard):not(#page-box-lookup):not(#page-uploads):not(#page-settings):not(#page-inventory):not(#page-orders) {
   padding: 24px;
   overflow-y: auto;
 }
@@ -311,6 +311,39 @@
   min-height: 0;
 }
 #logs-pagination { flex-shrink: 0; }
+
+/* ── Inventory + Orders: viewport-fit table pages ───────────── */
+#page-inventory,
+#page-orders {
+  overflow: hidden;
+  padding: 16px;
+}
+
+/* Card fills remaining height as a flex column */
+#page-inventory > .card,
+#page-orders > .card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Filter bar and delete bar never shrink */
+#page-inventory .filter-bar,
+#page-orders .filter-bar,
+#inv-delete-bar { flex-shrink: 0; }
+
+/* Table wrap fills remaining space and scrolls vertically */
+#page-inventory .table-wrap,
+#page-orders .table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Pagination stays pinned at the bottom */
+#page-inventory .pagination,
+#page-orders .pagination { flex-shrink: 0; }
 
 /* ── Box Lookup dedicated page ──────────────────────────────── */
 #page-box-lookup { overflow: hidden; }
