@@ -97,7 +97,15 @@
 }
 .drop-zone input[type="file"] { display: none; }
 
-.drop-icon { font-size: 30px; opacity: .4; margin-bottom: 10px; }
+.drop-icon {
+  font-size: 30px;
+  opacity: .4;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--txt-3);
+}
 .drop-text { font-size: 14px; font-weight: 600; color: var(--txt-2); }
 .drop-sub  { font-size: 12px; color: var(--txt-4); margin-top: 4px; }
 .drop-file { font-size: 13px; font-weight: 600; color: var(--success); margin-top: 8px; }

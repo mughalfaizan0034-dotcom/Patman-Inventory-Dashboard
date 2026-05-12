@@ -97,7 +97,7 @@ const Orders = (() => {
     if (!rows || !rows.length) {
       _selectedIds.clear();
       _updateDeleteBtn();
-      tbody.innerHTML = `<tr><td colspan="${ALL_COLS.length}" style="padding:0">${Loading.empty('🛒', 'No orders found', 'Adjust your filters or upload order data')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${ALL_COLS.length}" style="padding:0">${Loading.empty('shopping-cart', 'No orders found', 'Adjust your filters or upload order data')}</td></tr>`;
       if (info) info.textContent = '';
       Pagination.render('orders-pagination', 1, 0, () => {});
       return;
@@ -119,8 +119,8 @@ const Orders = (() => {
       if (isOverride) rowClass = rowClass ? `${rowClass} row-override` : 'row-override';
       const trAttr = rowClass ? ` class="${rowClass}"` : '';
       const shippedHtml = isOverride
-        ? `<span style="font-weight:500">${Utils.escapeHtml(effectiveShippedSku)}</span><span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Override</span><button class="order-edit-btn" style="background:none;border:none;opacity:.45;font-size:11px;padding:0 3px;margin-left:4px;cursor:pointer;vertical-align:middle" title="Change fulfillment SKU">✏️</button>`
-        : `<span class="order-edit-btn" style="display:inline-flex;align-items:center;gap:3px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer" title="Click to change fulfillment SKU">★ ${Utils.escapeHtml(effectiveShippedSku || '—')}</span>`;
+        ? `<span style="font-weight:500">${Utils.escapeHtml(effectiveShippedSku)}</span><span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Override</span><button class="order-edit-btn" style="background:none;border:none;opacity:.45;padding:0 3px;margin-left:4px;cursor:pointer;vertical-align:middle;display:inline-flex;align-items:center" title="Change fulfillment SKU"><i data-lucide="pencil" class="icon" style="width:12px;height:12px"></i></button>`
+        : `<span class="order-edit-btn" style="display:inline-flex;align-items:center;gap:3px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer" title="Click to change fulfillment SKU">&bull; ${Utils.escapeHtml(effectiveShippedSku || '&mdash;')}</span>`;
 
       return `<tr data-row-id="${Utils.escapeHtml(id)}"
                 data-order-date="${Utils.escapeHtml(row.order_date || '')}"
@@ -227,7 +227,7 @@ const Orders = (() => {
       const btn = document.createElement('button');
       btn.style.cssText = 'background:none;border:none;opacity:.45;font-size:11px;padding:0 3px;margin-left:4px;cursor:pointer;vertical-align:middle';
       btn.title = 'Change fulfillment SKU';
-      btn.textContent = '✏️';
+      btn.innerHTML = '<i data-lucide="pencil" class="icon" style="width:12px;height:12px"></i>';
       btn.addEventListener('click', e => { e.stopPropagation(); _openInlineSkuSelector(cell.closest('tr')); });
       text.appendChild(badge);
       cell.appendChild(text);
@@ -236,7 +236,7 @@ const Orders = (() => {
       const chip = document.createElement('span');
       chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer';
       chip.title = 'Click to change fulfillment SKU';
-      chip.textContent = shippedSku ? `★ ${shippedSku}` : '—';
+      chip.textContent = shippedSku ? `• ${shippedSku}` : '—';
       chip.addEventListener('click', e => { e.stopPropagation(); _openInlineSkuSelector(cell.closest('tr')); });
       cell.appendChild(chip);
     }
@@ -369,8 +369,8 @@ const Orders = (() => {
       _showSkuPopover(cell, allOptions, currentBox || effectiveOrigBox, async selectedBox => {
         const isOriginalSelected = selectedBox === effectiveOrigBox;
         const newShipped = isOriginalSelected ? '' : selectedBox;
-        const prevLabel  = currentBox && currentBox !== effectiveOrigBox ? _getEffectiveSku(sku, currentBox) : `★ ${_getEffectiveSku(sku, effectiveOrigBox)}`;
-        const nextLabel  = isOriginalSelected ? `★ ${_getEffectiveSku(sku, effectiveOrigBox)} (Original)` : _getEffectiveSku(sku, selectedBox);
+        const prevLabel  = currentBox && currentBox !== effectiveOrigBox ? _getEffectiveSku(sku, currentBox) : `• ${_getEffectiveSku(sku, effectiveOrigBox)}`;
+        const nextLabel  = isOriginalSelected ? `• ${_getEffectiveSku(sku, effectiveOrigBox)} (Original)` : _getEffectiveSku(sku, selectedBox);
 
         _restoreShippedCell(cell, newShipped);
         try {

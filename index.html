@@ -1,49 +1,49 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory Dashboard</title>
 
-  <!-- CSS â€” v=19: bump on every deploy to bust browser/CDN cache -->
-  <link rel="stylesheet" href="css/main.css?v=20">
-  <link rel="stylesheet" href="css/layout.css?v=20">
-  <link rel="stylesheet" href="css/components.css?v=20">
-  <link rel="stylesheet" href="css/tables.css?v=20">
-  <link rel="stylesheet" href="css/forms.css?v=20">
-  <link rel="stylesheet" href="css/animations.css?v=20">
+  <!-- CSS — v=22: bump on every deploy to bust browser/CDN cache -->
+  <link rel="stylesheet" href="css/main.css?v=22">
+  <link rel="stylesheet" href="css/layout.css?v=22">
+  <link rel="stylesheet" href="css/components.css?v=22">
+  <link rel="stylesheet" href="css/tables.css?v=22">
+  <link rel="stylesheet" href="css/forms.css?v=22">
+  <link rel="stylesheet" href="css/animations.css?v=22">
 
-  <!-- Favicon -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>ðŸ“¦</text></svg>">
+  <!-- Favicon: Lucide "package" icon in brand blue -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpolyline points='3.27 6.96 12 12.01 20.73 6.96'/%3E%3Cline x1='12' y1='22.08' x2='12' y2='12'/%3E%3C/svg%3E">
 </head>
 <body>
 
-  <!-- â”€â”€ Loading Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Loading Screen ─────────────────────────────────────────────── -->
   <div id="loading-screen">
     <div class="load-logo">P</div>
-    <div class="load-text">Loading Dashboardâ€¦</div>
+    <div class="load-text">Loading Dashboard&hellip;</div>
     <div class="spin" style="margin-top:8px"></div>
   </div>
 
-  <!-- â”€â”€ Org Selector Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Org Selector Screen ────────────────────────────────────────── -->
   <div id="org-selector-screen" style="display:none">
     <div class="login-card">
       <div class="login-brand">
         <div class="login-logo">P</div>
         <div>
           <div class="login-brand-name">Inventory Dashboard</div>
-          <div class="login-brand-sub" id="org-selector-user-name">â€”</div>
+          <div class="login-brand-sub" id="org-selector-user-name">&mdash;</div>
         </div>
       </div>
       <h1 class="login-heading">Select Workspace</h1>
       <p class="login-sub">You have access to multiple workspaces. Choose one to continue.</p>
       <div id="org-list" style="margin-top:8px"></div>
       <div id="org-selector-error" class="login-error" style="margin-top:8px"></div>
-      <button id="org-selector-back" class="btn btn-ghost btn-sm" style="margin-top:12px;width:100%">â† Back to sign in</button>
+      <button id="org-selector-back" class="btn btn-ghost btn-sm" style="margin-top:12px;width:100%">&larr; Back to sign in</button>
     </div>
   </div>
 
-  <!-- â”€â”€ Login Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Login Screen ───────────────────────────────────────────────── -->
   <div id="login-screen" style="display:none">
     <div class="login-card">
       <div class="login-brand">
@@ -66,14 +66,14 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="login-password">Password</label>
-          <input class="form-input" id="login-password" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password" required>
+          <input class="form-input" id="login-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password" required>
         </div>
         <button class="btn btn-primary btn-wide btn-lg" id="login-btn" type="submit">Sign in</button>
       </form>
     </div>
   </div>
 
-  <!-- â”€â”€ App Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── App Shell ──────────────────────────────────────────────────── -->
   <div id="app-shell" style="display:none">
 
     <!-- Sidebar -->
@@ -88,27 +88,27 @@
 
       <nav class="sidebar-nav">
         <div class="nav-item active" data-page="dashboard">
-          <span class="nav-icon">ðŸ“Š</span>
+          <span class="nav-icon"><i data-lucide="layout-dashboard" class="icon" style="width:18px;height:18px"></i></span>
           <span>Dashboard</span>
         </div>
         <div class="nav-item" data-page="performance">
-          <span class="nav-icon">ðŸ“ˆ</span>
+          <span class="nav-icon"><i data-lucide="trending-up" class="icon" style="width:18px;height:18px"></i></span>
           <span>Performance</span>
         </div>
         <div class="nav-item" data-page="inventory">
-          <span class="nav-icon">ðŸ“¦</span>
+          <span class="nav-icon"><i data-lucide="package" class="icon" style="width:18px;height:18px"></i></span>
           <span>Inventory List</span>
         </div>
         <div class="nav-item" data-page="orders">
-          <span class="nav-icon">ðŸ›’</span>
+          <span class="nav-icon"><i data-lucide="shopping-cart" class="icon" style="width:18px;height:18px"></i></span>
           <span>Orders</span>
         </div>
         <div class="nav-item" data-page="uploads" data-min-role="manager">
-          <span class="nav-icon">ðŸ“¤</span>
+          <span class="nav-icon"><i data-lucide="upload" class="icon" style="width:18px;height:18px"></i></span>
           <span>Uploads</span>
         </div>
         <div class="nav-item" data-page="settings" data-min-role="admin">
-          <span class="nav-icon">âš™ï¸</span>
+          <span class="nav-icon"><i data-lucide="settings" class="icon" style="width:18px;height:18px"></i></span>
           <span>Settings</span>
         </div>
       </nav>
@@ -117,8 +117,8 @@
         <div class="sidebar-user">
           <div class="sidebar-avatar">?</div>
           <div>
-            <div class="sidebar-user-name">Loadingâ€¦</div>
-            <div class="sidebar-user-role">â€”</div>
+            <div class="sidebar-user-name">Loading&hellip;</div>
+            <div class="sidebar-user-role">&mdash;</div>
           </div>
         </div>
         <button class="btn btn-ghost btn-wide btn-sm" id="logout-btn">Sign out</button>
@@ -132,15 +132,17 @@
       <header class="topbar">
         <div id="topbar-title" class="topbar-title">Dashboard</div>
         <div class="topbar-actions">
-          <!-- Org switcher â€” hidden when user has only one org -->
+          <!-- Org switcher — hidden when user has only one org -->
           <div id="org-switcher" style="display:none;position:relative;cursor:pointer;user-select:none">
             <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#fff;padding:6px 11px;border:none;border-radius:var(--r-sm);background:var(--primary);transition:background .15s" onmouseover="this.style.background='var(--primary-dark,#1d4ed8)'" onmouseout="this.style.background='var(--primary)'">
-              <span id="current-org-name">â€”</span>
-              <span style="font-size:10px;color:rgba(255,255,255,.75)">â–¾</span>
+              <span id="current-org-name">&mdash;</span>
+              <i data-lucide="chevron-down" class="icon" style="width:12px;height:12px;color:rgba(255,255,255,.75)"></i>
             </div>
             <div id="org-switcher-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);min-width:180px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow-md);z-index:200;overflow:hidden"></div>
           </div>
-          <button id="topbar-refresh-btn" title="Refresh" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:none;border-radius:var(--r-sm);background:var(--primary);color:#fff;font-size:15px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--primary-dark,#1d4ed8)'" onmouseout="this.style.background='var(--primary)'">â†»</button>
+          <button id="topbar-refresh-btn" title="Refresh" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:none;border-radius:var(--r-sm);background:var(--primary);color:#fff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--primary-dark,#1d4ed8)'" onmouseout="this.style.background='var(--primary)'">
+            <i data-lucide="refresh-cw" class="icon" style="width:15px;height:15px"></i>
+          </button>
           <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--txt-4)">
             <span class="status-dot online"></span>
             <span id="last-sync-time">Connected</span>
@@ -151,35 +153,62 @@
       <!-- Page content -->
       <main class="page-content">
 
-        <!-- â”€â”€ Dashboard page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Dashboard page ───────────────────────────────────────── -->
         <div id="page-dashboard" class="page active">
-          <div id="dash-analytics">
-            <div id="panel-inventory-intel" class="card" style="padding:0;overflow:hidden"></div>
-            <div id="panel-sales-intel"     class="card" style="padding:0;overflow:hidden"></div>
+
+          <!-- Compact KPI strip -->
+          <div class="dash-kpi-bar">
+            <div class="dash-kpi-row">
+              <div class="dash-kpi-row-label">
+                <span class="dash-kpi-row-icon"><i data-lucide="package" class="icon" style="width:15px;height:15px"></i></span>
+                <span class="dash-kpi-row-title">Inventory</span>
+              </div>
+              <div class="dash-kpi-row-metrics" id="panel-inventory-intel"></div>
+            </div>
+            <div class="dash-kpi-row">
+              <div class="dash-kpi-row-label">
+                <span class="dash-kpi-row-icon"><i data-lucide="trending-up" class="icon" style="width:15px;height:15px"></i></span>
+                <span class="dash-kpi-row-title">Sales</span>
+              </div>
+              <div class="dash-kpi-row-metrics" id="panel-sales-intel"></div>
+            </div>
           </div>
-          <div class="card card-table" style="padding:0">
-            <div class="filter-bar" style="flex-wrap:wrap">
+
+          <!-- Box Lookup primary workspace -->
+          <div class="dash-lookup-area">
+            <div class="dash-lookup-header">
+              <span class="dash-lookup-header-icon"><i data-lucide="search" class="icon" style="width:14px;height:14px"></i></span>
+              <span class="dash-lookup-header-title">Box Lookup</span>
+            </div>
+            <div class="dash-lookup-search">
               <div style="position:relative;flex:1;min-width:240px">
-                <span class="search-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4)">ðŸ”</span>
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4);pointer-events:none;display:flex;align-items:center">
+                  <i data-lucide="search" class="icon" style="width:14px;height:14px"></i>
+                </span>
                 <input class="form-input search-input" id="box-search-input"
-                  placeholder="Search part number or UPCâ€¦" autocomplete="off">
+                  placeholder="Search part number or UPC&hellip;" autocomplete="off" style="padding-left:34px">
               </div>
-              <button class="btn btn-ghost btn-sm" id="box-clear-btn" style="display:none">âœ• Clear</button>
+              <button class="btn btn-ghost btn-sm" id="box-clear-btn" style="display:none">
+                <i data-lucide="x" class="icon" style="width:13px;height:13px"></i> Clear
+              </button>
             </div>
-            <div id="lookup-result-area" style="padding:16px 20px">
-              <div id="lookup-tabs" style="display:none;margin-bottom:16px">
-                <div style="display:flex;gap:0;border-bottom:2px solid var(--border)">
-                  <button class="lookup-tab active" data-tab="instock" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary);margin-bottom:-2px">In Stock</button>
-                  <button class="lookup-tab" data-tab="all" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--txt-3)">All Boxes</button>
+            <div class="dash-lookup-results">
+              <div id="lookup-result-area">
+                <div id="lookup-tabs" style="display:none;margin-bottom:12px">
+                  <div style="display:flex;gap:0;border-bottom:2px solid var(--border)">
+                    <button class="lookup-tab active" data-tab="instock" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary);margin-bottom:-2px">In Stock</button>
+                    <button class="lookup-tab" data-tab="all" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--txt-3)">All Boxes</button>
+                  </div>
                 </div>
+                <div id="lookup-instock"></div>
+                <div id="lookup-all" style="display:none"></div>
               </div>
-              <div id="lookup-instock"></div>
-              <div id="lookup-all" style="display:none"></div>
             </div>
           </div>
+
         </div>
 
-        <!-- â”€â”€ Performance page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Performance page ─────────────────────────────────────── -->
         <div id="page-performance" class="page">
           <div class="perf-filter-sticky">
             <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
@@ -198,13 +227,13 @@
 
           <div id="perf-container" style="position:relative">
 
-            <!-- Weekly Sales â€” full width -->
+            <!-- Weekly Sales — full width -->
             <div class="card" style="margin-bottom:16px">
               <div class="card-header"><div class="card-title">Weekly Sales</div></div>
               <div class="chart-wrap"><canvas id="chart-weekly"></canvas></div>
             </div>
 
-            <!-- Sales by Platform â€” full width, no duplicate legend -->
+            <!-- Sales by Platform — full width, no duplicate legend -->
             <div class="card" style="margin-bottom:16px">
               <div class="card-header"><div class="card-title">Sales by Platform</div></div>
               <div style="display:flex;align-items:center;gap:40px;padding:8px 4px 16px">
@@ -215,7 +244,7 @@
               </div>
             </div>
 
-            <!-- Monthly Summary â€” full width -->
+            <!-- Monthly Summary — full width -->
             <div class="card card-table" style="margin-bottom:32px">
               <div class="card-header" style="padding:16px 20px 0">
                 <div class="card-title">Monthly Summary</div>
@@ -238,13 +267,15 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Inventory List page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Inventory List page ──────────────────────────────────── -->
         <div id="page-inventory" class="page">
           <div class="card card-table" style="padding:0">
             <div class="filter-bar" style="flex-wrap:wrap">
               <div style="position:relative;flex:1;min-width:200px">
-                <span class="search-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4)">ðŸ”</span>
-                <input class="form-input search-input" id="inventory-search" placeholder="Search by SKU, Part #, or UPCâ€¦">
+                <span class="search-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4);display:flex;align-items:center">
+                  <i data-lucide="search" class="icon" style="width:14px;height:14px"></i>
+                </span>
+                <input class="form-input search-input" id="inventory-search" placeholder="Search by SKU, Part #, or UPC&hellip;" style="padding-left:34px">
               </div>
               <select class="form-select" id="filter-inventory-status" style="width:160px">
                 <option value="all">All Inventory</option>
@@ -253,7 +284,9 @@
                 <option value="phantom">Phantom SKUs</option>
                 <option value="undefined">Undefined SKUs</option>
               </select>
-              <button class="btn btn-secondary btn-sm" id="inventory-export-btn">ðŸ“¥ Export</button>
+              <button class="btn btn-secondary btn-sm" id="inventory-export-btn">
+                <i data-lucide="download" class="icon" style="width:14px;height:14px"></i> Export
+              </button>
             </div>
             <!-- Inventory selection bar -->
             <div id="inv-delete-bar" style="display:none;align-items:center;gap:10px;padding:8px 16px;background:var(--warning-bg,#fffbeb);border-bottom:1px solid var(--warning-bd,#fde68a)">
@@ -288,13 +321,15 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Orders page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Orders page ──────────────────────────────────────────── -->
         <div id="page-orders" class="page">
           <div class="card card-table" style="padding:0">
             <div class="filter-bar" style="flex-wrap:wrap">
               <div style="position:relative;flex:1;min-width:180px">
-                <span class="search-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4)">ðŸ”</span>
-                <input class="form-input search-input" id="orders-search" placeholder="Search by SKUâ€¦">
+                <span class="search-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4);display:flex;align-items:center">
+                  <i data-lucide="search" class="icon" style="width:14px;height:14px"></i>
+                </span>
+                <input class="form-input search-input" id="orders-search" placeholder="Search by SKU&hellip;" style="padding-left:34px">
               </div>
               <select class="form-select" id="filter-platform" style="width:160px">
                 <option value="">All Platforms</option>
@@ -308,7 +343,9 @@
               </select>
               <button class="btn btn-ghost btn-sm" id="orders-reset-filters">Reset</button>
               <button class="btn btn-danger btn-sm" id="orders-delete-selected" disabled>Delete Selected</button>
-              <button class="btn btn-secondary btn-sm" id="orders-export">ðŸ“¥ Export Orders</button>
+              <button class="btn btn-secondary btn-sm" id="orders-export">
+                <i data-lucide="download" class="icon" style="width:14px;height:14px"></i> Export Orders
+              </button>
             </div>
             <div class="table-wrap" style="border:none;border-radius:0">
               <table class="data-table" id="orders-table">
@@ -332,7 +369,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Orders delete confirmation modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Orders delete confirmation modal ──────────────────── -->
         <div id="orders-delete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
           <div class="login-card" style="max-width:440px;width:100%;padding:24px 28px">
             <div style="font-size:15px;font-weight:600;margin-bottom:10px;color:var(--txt-1)">Confirm Delete</div>
@@ -344,7 +381,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Uploads page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Uploads page ─────────────────────────────────────────── -->
         <div id="page-uploads" class="page" data-min-role="manager">
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:24px">
@@ -353,36 +390,36 @@
             <div id="upload-guide-wrapper" style="grid-column:1/-1">
               <div id="upload-guide-header" class="guide-pulse"
                 style="display:flex;align-items:center;justify-content:space-between;background:var(--primary);color:#fff;padding:11px 16px;border-radius:var(--r-sm);cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.25)"
-                onclick="(function(){var b=document.getElementById('upload-guide-body');var open=b.style.display!=='none';b.style.display=open?'none':'block';document.getElementById('guide-toggle-text').textContent=open?'Show Guide':'Hide Guide';document.getElementById('guide-chevron').textContent=open?'â–¼':'â–²';document.getElementById('upload-guide-header').style.borderRadius=open?'var(--r-sm)':'var(--r-sm) var(--r-sm) 0 0'})()">
+                onclick="(function(){var b=document.getElementById('upload-guide-body');var open=b.style.display!=='none';b.style.display=open?'none':'block';document.getElementById('guide-toggle-text').textContent=open?'Show Guide':'Hide Guide';document.getElementById('guide-chevron').dataset.lucide=open?'chevron-down':'chevron-up';lucide.createIcons();document.getElementById('upload-guide-header').style.borderRadius=open?'var(--r-sm)':'var(--r-sm) var(--r-sm) 0 0'})()">
                 <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;pointer-events:none">
-                  <span>ðŸ“˜</span>
+                  <i data-lucide="book-open" class="icon" style="width:15px;height:15px"></i>
                   <span>Upload Preparation Guide</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:rgba(255,255,255,.88);pointer-events:none">
                   <span id="guide-toggle-text">Show Guide</span>
-                  <span id="guide-chevron">â–¼</span>
+                  <i data-lucide="chevron-down" class="icon" id="guide-chevron" style="width:13px;height:13px"></i>
                 </div>
               </div>
               <div id="upload-guide-body" style="display:none;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-sm) var(--r-sm);padding:16px 18px">
                 <div style="display:grid;gap:7px;margin-bottom:12px">
                   <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surface-2);border-radius:6px;font-size:12.5px;color:var(--txt-2)">
-                    <span>1ï¸âƒ£</span><div>Download the <strong>CSV template</strong> below for the data type you want to upload</div>
+                    <span class="step-badge">1</span><div>Download the <strong>CSV template</strong> below for the data type you want to upload</div>
                   </div>
                   <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surface-2);border-radius:6px;font-size:12.5px;color:var(--txt-2)">
-                    <span>2ï¸âƒ£</span><div>Fill in your data using <strong>Excel or Google Sheets</strong></div>
+                    <span class="step-badge">2</span><div>Fill in your data using <strong>Excel or Google Sheets</strong></div>
                   </div>
                   <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.28);border-radius:6px;font-size:12.5px;color:var(--txt-2)">
-                    <span>3ï¸âƒ£</span><div><strong>Format SKU / UPC / Order ID columns as Text</strong> in Excel before entering values â€” otherwise Excel removes leading zeros and corrupts barcodes</div>
+                    <span class="step-badge">3</span><div><strong>Format SKU / UPC / Order ID columns as Text</strong> in Excel before entering values &mdash; otherwise Excel removes leading zeros and corrupts barcodes</div>
                   </div>
                   <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surface-2);border-radius:6px;font-size:12.5px;color:var(--txt-2)">
-                    <span>4ï¸âƒ£</span><div><strong>File â†’ Save As â†’ Tab delimited Text (.txt)</strong> with UTF-8 encoding</div>
+                    <span class="step-badge">4</span><div><strong>File &rarr; Save As &rarr; Tab delimited Text (.txt)</strong> with UTF-8 encoding</div>
                   </div>
                   <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surface-2);border-radius:6px;font-size:12.5px;color:var(--txt-2)">
-                    <span>5ï¸âƒ£</span><div>Upload the <strong>.txt file</strong> using the form below</div>
+                    <span class="step-badge">5</span><div>Upload the <strong>.txt file</strong> using the form below</div>
                   </div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.18);border-radius:6px;font-size:12px;color:var(--txt-2)">
-                  <span>âš ï¸</span>
+                  <i data-lucide="alert-triangle" class="icon" style="width:15px;height:15px;color:#dc2626;flex-shrink:0;margin-top:1px"></i>
                   <div><strong>Excel / XLSX uploads are not supported.</strong> Export as UTF-8 tab-delimited TXT (.txt) only. <strong>quantity</strong> and <strong>quantity_sold</strong> must be whole numbers. <strong>date_added</strong> / <strong>order_date</strong> must be a valid date format.</div>
                 </div>
               </div>
@@ -391,17 +428,19 @@
             <!-- Inventory upload -->
             <div class="upload-card">
               <div class="upload-card-header">
-                <div class="upload-card-title">ðŸ“¦ Inventory Data</div>
+                <div class="upload-card-title" style="display:flex;align-items:center;gap:6px">
+                  <i data-lucide="package" class="icon" style="width:16px;height:16px"></i> Inventory Data
+                </div>
                 <a href="#" class="btn btn-ghost btn-sm" data-download-template="inventory">Download CSV Template</a>
               </div>
               <div class="upload-card-desc">
-                <strong>action</strong> column: <code>Add</code> / <code>Update</code> / <code>Remove</code> &nbsp;Â·&nbsp; <strong>Add</strong> requires: sku, upc, quantity, part_number, box_number, date_added
+                <strong>action</strong> column: <code>Add</code> / <code>Update</code> / <code>Remove</code> &nbsp;&middot;&nbsp; <strong>Add</strong> requires: sku, upc, quantity, part_number, box_number, date_added
               </div>
               <div class="drop-zone" id="drop-zone-inventory">
                 <input type="file" id="file-input-inventory" accept=".txt">
-                <div class="drop-icon">ðŸ“¦</div>
+                <div class="drop-icon"><i data-lucide="package" class="icon" style="width:32px;height:32px"></i></div>
                 <div class="drop-text">Drop .txt file here or click to browse</div>
-                <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) Â· Max 10 MB / 100,000 rows</div>
+                <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) &middot; Max 10 MB / 100,000 rows</div>
                 <div class="drop-file" style="display:none"></div>
               </div>
               <div class="progress-wrap" id="progress-inventory" style="display:none">
@@ -417,17 +456,19 @@
             <!-- Orders upload -->
             <div class="upload-card">
               <div class="upload-card-header">
-                <div class="upload-card-title">ðŸ›’ Order Data</div>
+                <div class="upload-card-title" style="display:flex;align-items:center;gap:6px">
+                  <i data-lucide="shopping-cart" class="icon" style="width:16px;height:16px"></i> Order Data
+                </div>
                 <a href="#" class="btn btn-ghost btn-sm" data-download-template="orders">Download CSV Template</a>
               </div>
               <div class="upload-card-desc">
-                <strong>action</strong> column: <code>Add</code> / <code>Update</code> / <code>Remove</code> &nbsp;Â·&nbsp; <strong>Add</strong> requires: order_date, sku, quantity_sold, platform &nbsp;Â·&nbsp; <strong>Update/Remove</strong> requires: order_id
+                <strong>action</strong> column: <code>Add</code> / <code>Update</code> / <code>Remove</code> &nbsp;&middot;&nbsp; <strong>Add</strong> requires: order_date, sku, quantity_sold, platform &nbsp;&middot;&nbsp; <strong>Update/Remove</strong> requires: order_id
               </div>
               <div class="drop-zone" id="drop-zone-orders">
                 <input type="file" id="file-input-orders" accept=".txt">
-                <div class="drop-icon">ðŸ“‹</div>
+                <div class="drop-icon"><i data-lucide="clipboard-list" class="icon" style="width:32px;height:32px"></i></div>
                 <div class="drop-text">Drop .txt file here or click to browse</div>
-                <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) Â· Max 10 MB / 100,000 rows</div>
+                <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) &middot; Max 10 MB / 100,000 rows</div>
                 <div class="drop-file" style="display:none"></div>
               </div>
               <div class="progress-wrap" id="progress-orders" style="display:none">
@@ -450,7 +491,9 @@
                 <option value="inventory">Inventory</option>
                 <option value="orders">Orders</option>
               </select>
-              <button class="btn btn-ghost btn-sm" id="history-refresh-btn">â†» Refresh</button>
+              <button class="btn btn-ghost btn-sm" id="history-refresh-btn">
+                <i data-lucide="refresh-cw" class="icon" style="width:13px;height:13px"></i> Refresh
+              </button>
             </div>
             <div class="table-wrap" style="border:none;border-radius:0">
               <table class="data-table">
@@ -469,7 +512,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Settings page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Settings page ─────────────────────────────────────────── -->
         <div id="page-settings" class="page" data-min-role="admin">
           <div class="section-header">
             <div>
@@ -539,16 +582,16 @@
               <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
                 <div id="profile-avatar" style="width:56px;height:56px;border-radius:50%;background:var(--primary-100);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--primary-text)">?</div>
                 <div>
-                  <div id="profile-name"     style="font-size:17px;font-weight:700;color:var(--txt-1)">â€”</div>
-                  <div id="profile-username" style="font-size:13px;color:var(--txt-3)">â€”</div>
+                  <div id="profile-name"     style="font-size:17px;font-weight:700;color:var(--txt-1)">&mdash;</div>
+                  <div id="profile-username" style="font-size:13px;color:var(--txt-3)">&mdash;</div>
                   <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-                    <span id="profile-org"  style="font-size:12px;color:var(--txt-4)">â€”</span>
-                    <span id="profile-role" style="font-size:11px;font-weight:600;color:var(--txt-4)">â€”</span>
+                    <span id="profile-org"  style="font-size:12px;color:var(--txt-4)">&mdash;</span>
+                    <span id="profile-role" style="font-size:11px;font-weight:600;color:var(--txt-4)">&mdash;</span>
                   </div>
                 </div>
               </div>
               <div class="info-banner">
-                <span class="info-banner-icon">â„¹</span>
+                <span class="info-banner-icon"><i data-lucide="info" class="icon" style="width:14px;height:14px"></i></span>
                 <span>To change your password, contact an administrator. Use the org switcher in the top bar to change organizations.</span>
               </div>
             </div>
@@ -587,21 +630,22 @@
   <!-- External libraries (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
-  <!-- App modules â€” order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=19 â€” bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=20"></script>
-  <script src="js/notifications.js?v=20"></script>
-  <script src="js/loading.js?v=20"></script>
-  <script src="js/api.js?v=20"></script>
-  <script src="js/metricsEngine.js?v=20"></script>
-  <script src="js/auth.js?v=20"></script>
-  <script src="js/dashboard.js?v=20"></script>
-  <script src="js/inventory.js?v=20"></script>
-  <script src="js/orders.js?v=20"></script>
-  <script src="js/uploads.js?v=20"></script>
-  <script src="js/app.js?v=20"></script>
+  <!-- App modules — order matters: utilities first, then API/auth, then features, app last -->
+  <!-- v=22 — bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=22"></script>
+  <script src="js/icons.js?v=22"></script>
+  <script src="js/notifications.js?v=22"></script>
+  <script src="js/loading.js?v=22"></script>
+  <script src="js/api.js?v=22"></script>
+  <script src="js/metricsEngine.js?v=22"></script>
+  <script src="js/auth.js?v=22"></script>
+  <script src="js/dashboard.js?v=22"></script>
+  <script src="js/inventory.js?v=22"></script>
+  <script src="js/orders.js?v=22"></script>
+  <script src="js/uploads.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 
 </body>
 </html>
-

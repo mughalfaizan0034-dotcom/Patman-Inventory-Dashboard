@@ -1,44 +1,27 @@
 /* ============================================================
-   dashboard.js — KPI tiles, dashboard page, performance charts
+   dashboard.js — KPI strip, dashboard page, performance charts
    ============================================================ */
 
 /* ── Dashboard (Overview page) ──────────────────────────────── */
 const Dashboard = (() => {
 
+  /* Inventory row: Total SKUs | In Stock (bar) | OOS (bar) | Total Units | Remaining (bar) | Undefined SKUs */
   const INVENTORY_METRICS = [
-    {
-      rows: [
-        { id: 'dm-total-skus',    label: 'Total SKUs',         field: 'totalSkus',              navigate: 'inventory' },
-        { id: 'dm-total-units',   label: 'Total Units',        field: 'totalUnits',             navigate: 'inventory' },
-        { id: 'dm-remaining',     label: 'Actual Remaining',   field: 'physicalRemainingUnits', navigate: 'inventory', accent: 'green' },
-        { id: 'dm-phantom-units', label: 'Phantom Units',      field: 'phantomUnits',           navigate: 'inventory', action: 'phantom', warnIfPositive: true },
-        { id: 'dm-undef-inv',     label: 'Undefined SKUs',     field: 'undefinedSkus',          navigate: 'inventory', action: 'undefined', warnIfPositive: true },
-      ],
-    },
-    {
-      divided: true,
-      rows: [
-        { id: 'dm-instock-skus',  label: 'In Stock SKUs',      field: 'inStockSkus',            accent: 'green' },
-        { id: 'dm-oos-skus',      label: 'OOS SKUs',           field: 'oosSkus',                accent: 'orange' },
-      ],
-    },
+    { id: 'dm-total-skus',   label: 'Total SKUs',    field: 'totalSkus',              navigate: 'inventory' },
+    { id: 'dm-instock-skus', label: 'In Stock',      field: 'inStockSkus',            barOf: 'totalSkus',  barColor: '#16a34a', accent: 'green' },
+    { id: 'dm-oos-skus',     label: 'OOS',           field: 'oosSkus',                barOf: 'totalSkus',  barColor: '#ea580c', accent: 'orange' },
+    { id: 'dm-total-units',  label: 'Total Units',   field: 'totalUnits',             navigate: 'inventory' },
+    { id: 'dm-remaining',    label: 'Remaining',     field: 'physicalRemainingUnits', barOf: 'totalUnits', barColor: '#16a34a', accent: 'green', navigate: 'inventory' },
+    { id: 'dm-undef-inv',    label: 'Undefined SKUs',field: 'undefinedSkus',          navigate: 'inventory', action: 'undefined', warnIfPositive: true },
   ];
 
+  /* Sales row: Total Orders | Units Sold | Actual Sold | Phantom Units | Unknown SKU Orders */
   const SALES_METRICS = [
-    {
-      rows: [
-        { id: 'dm-total-orders',  label: 'Total Orders',        field: 'totalOrders',            navigate: 'orders' },
-        { id: 'dm-units-sold',    label: 'Units Sold',          field: 'unitsSold',              navigate: 'orders' },
-        { id: 'dm-actual-sold',   label: 'Actual Units Sold',   field: 'actualUnitsSold',        accent: 'teal', sub: 'Total sold minus phantom demand' },
-        { id: 'dm-phantom-u-s',   label: 'Phantom Units',       field: 'phantomUnits',           warnIfPositive: true },
-      ],
-    },
-    {
-      divided: true,
-      rows: [
-        { id: 'dm-undef-orders',  label: 'Undefined SKU Orders', field: 'undefinedSkuOrders',    navigate: 'orders', action: 'unknown_orders', warnIfPositive: true },
-      ],
-    },
+    { id: 'dm-total-orders', label: 'Total Orders',       field: 'totalOrders',        navigate: 'orders' },
+    { id: 'dm-units-sold',   label: 'Units Sold',         field: 'unitsSold',          navigate: 'orders' },
+    { id: 'dm-actual-sold',  label: 'Actual Sold',        field: 'actualUnitsSold',    accent: 'teal' },
+    { id: 'dm-phantom-u-s',  label: 'Phantom Units',      field: 'phantomUnits',       warnIfPositive: true },
+    { id: 'dm-undef-orders', label: 'Unknown SKU Orders', field: 'undefinedSkuOrders', navigate: 'orders', action: 'unknown_orders', warnIfPositive: true },
   ];
 
   function _valueColor(def, val) {
@@ -49,94 +32,68 @@ const Dashboard = (() => {
     return 'var(--txt-1)';
   }
 
-  function _metricCard(def, data) {
+  function _metricItem(def, data) {
     const val     = data[def.field] ?? null;
     const display = val != null ? Utils.formatNumber(val) : '—';
     const color   = _valueColor(def, val ?? 0);
     const nav     = def.navigate
       ? `data-navigate="${def.navigate}"${def.action ? ` data-action="${def.action}"` : ''}`
       : '';
+
+    let barHtml = '';
+    if (def.barOf) {
+      const total = data[def.barOf] || 0;
+      const pct   = total > 0 ? Math.min(100, Math.round((val || 0) / total * 100)) : 0;
+      barHtml = `
+        <div class="dash-kpi-item-bar-wrap">
+          <div class="dash-kpi-item-bar" style="width:${pct}%;background:${def.barColor || 'var(--primary)'}"></div>
+        </div>`;
+    }
+
     return `
-      <div class="dash-metric-card${def.navigate ? ' clickable' : ''}" ${nav}>
-        <div>
-          <div class="dash-metric-label">${Utils.escapeHtml(def.label)}</div>
-          ${def.sub ? `<div class="dash-metric-sub">${Utils.escapeHtml(def.sub)}</div>` : ''}
-        </div>
-        <div class="dash-metric-value" id="${def.id}" style="color:${color}">${Utils.escapeHtml(String(display))}</div>
+      <div class="dash-kpi-item${def.navigate ? ' clickable' : ''}" ${nav}>
+        <div class="dash-kpi-item-label">${Utils.escapeHtml(def.label)}</div>
+        <div class="dash-kpi-item-value" id="${def.id}" style="color:${color}">${Utils.escapeHtml(String(display))}</div>
+        ${barHtml}
       </div>`;
   }
 
-  function _skeletonCard() {
+  function _skeletonItem() {
     return `
-      <div class="dash-metric-card">
-        <div class="skel skel-line" style="width:80px;height:13px;margin-bottom:10px"></div>
-        <div class="skel skel-line" style="width:105px;height:24px"></div>
+      <div class="dash-kpi-item">
+        <div class="skel skel-line" style="width:72px;height:10px;margin-bottom:6px"></div>
+        <div class="skel skel-line" style="width:56px;height:20px"></div>
       </div>`;
   }
 
-  function _renderPanel(containerId, icon, title, metricGroups, data) {
+  function _renderPanel(containerId, metrics, data) {
     const el = document.getElementById(containerId);
     if (!el) return;
 
     const isLoading = !data;
-    const groupsHtml = metricGroups.map(group => {
-      const cardsHtml = isLoading
-        ? group.rows.map(_skeletonCard).join('')
-        : group.rows.map(def => _metricCard(def, data)).join('');
-      return `<div class="dash-card-grid${group.divided ? ' dash-card-grid--divided' : ''}">${cardsHtml}</div>`;
-    }).join('');
-
-    el.innerHTML = `
-      <div class="dash-panel-header">
-        <span style="font-size:15px;line-height:1">${icon}</span>
-        <span class="dash-panel-title">${Utils.escapeHtml(title)}</span>
-      </div>
-      <div class="dash-panel-body">${groupsHtml}</div>`;
+    el.innerHTML = isLoading
+      ? metrics.map(_skeletonItem).join('')
+      : metrics.map(def => _metricItem(def, data)).join('');
 
     if (data) {
-      el.querySelectorAll('.dash-metric-card[data-navigate]').forEach(card => {
-        card.addEventListener('click', () => {
-          App.navigate(card.dataset.navigate);
-          const action = card.dataset.action;
-          if (action === 'phantom')        setTimeout(() => InventoryList.setStatusFilter?.('phantom'), 60);
-          else if (action === 'undefined') setTimeout(() => InventoryList.setStatusFilter?.('undefined'), 60);
+      el.querySelectorAll('.dash-kpi-item[data-navigate]').forEach(item => {
+        item.addEventListener('click', () => {
+          App.navigate(item.dataset.navigate);
+          const action = item.dataset.action;
+          if (action === 'undefined')          setTimeout(() => InventoryList.setStatusFilter?.('undefined'), 60);
           else if (action === 'unknown_orders') setTimeout(() => Orders.setStatusFilter?.('unknown'), 60);
         });
       });
     }
   }
 
-  function _renderSkeletons() {
-    _renderPanel('panel-inventory-intel', '📦', 'Inventory Intelligence', INVENTORY_METRICS, null);
-    _renderPanel('panel-sales-intel',     '📈', 'Sales Intelligence',     SALES_METRICS,     null);
-  }
-
-  function _renderRecentActivity(items) {
-    const el = document.getElementById('recent-activity-list');
-    if (!el) return;
-
-    if (!items || !items.length) { el.innerHTML = Loading.empty('📋', 'No recent activity'); return; }
-
-    el.innerHTML = items.map(item => `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:18px">${Utils.escapeHtml(item.icon || '📄')}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500;color:var(--txt-1)">${Utils.escapeHtml(item.title)}</div>
-          <div style="font-size:11.5px;color:var(--txt-4)">${Utils.timeAgo(item.date)}</div>
-        </div>
-      </div>`).join('');
-  }
-
   async function load() {
-    _renderSkeletons();
+    _renderPanel('panel-inventory-intel', INVENTORY_METRICS, null);
+    _renderPanel('panel-sales-intel',     SALES_METRICS,     null);
     try {
-      const [kpiData, activityData] = await Promise.all([
-        MetricsEngine.load(),
-        API.getActivity().catch(() => []),
-      ]);
-      _renderPanel('panel-inventory-intel', '📦', 'Inventory Intelligence', INVENTORY_METRICS, kpiData);
-      _renderPanel('panel-sales-intel',     '📈', 'Sales Intelligence',     SALES_METRICS,     kpiData);
-      _renderRecentActivity(activityData);
+      const kpiData = await MetricsEngine.load();
+      _renderPanel('panel-inventory-intel', INVENTORY_METRICS, kpiData);
+      _renderPanel('panel-sales-intel',     SALES_METRICS,     kpiData);
 
       const lastSyncEl = document.getElementById('last-sync-time');
       if (lastSyncEl) lastSyncEl.textContent = 'Updated ' + Utils.timeAgo(new Date().toISOString());
@@ -159,14 +116,6 @@ const Perf = (() => {
 
   const PLATFORM_COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#64748b'];
 
-  const STATUS_COLORS = {
-    'In Stock':  '#16a34a',
-    'OOS':       '#ea580c',
-    'Phantom':   '#dc2626',
-    'Undefined': '#94a3b8',
-  };
-  const STATUS_ORDER = ['In Stock', 'OOS', 'Phantom', 'Undefined'];
-
   async function load() {
     const container = document.getElementById('perf-container');
     if (container) Loading.section(container, true);
@@ -178,9 +127,9 @@ const Perf = (() => {
       ]);
 
       _populatePlatformSelect(platforms);
-      _renderWeeklyChart(data.weekly   || []);
+      _renderWeeklyChart(data.weekly    || []);
       _renderPlatformChart(data.platforms || []);
-      _renderMonthlyTable(data.monthly || []);
+      _renderMonthlyTable(data.monthly  || []);
     } catch (err) {
       Notify.apiError(err);
     } finally {
@@ -190,7 +139,7 @@ const Perf = (() => {
 
   function _populatePlatformSelect(platforms) {
     const sel = document.getElementById('perf-platform-select');
-    if (!sel || sel.options.length > 1) return; // already populated
+    if (!sel || sel.options.length > 1) return;
     platforms.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p;
@@ -317,14 +266,17 @@ const Perf = (() => {
   function _renderMonthlyTable(monthly) {
     const tbody = document.getElementById('monthly-tbody');
     if (!tbody) return;
-    if (!monthly.length) { tbody.innerHTML = `<tr><td colspan="4">${Loading.empty('📅', 'No data')}</td></tr>`; return; }
+    if (!monthly.length) {
+      tbody.innerHTML = `<tr><td colspan="4">${Loading.empty('calendar', 'No data')}</td></tr>`;
+      return;
+    }
 
     tbody.innerHTML = monthly.map(m => `
       <tr>
         <td>${Utils.escapeHtml(m.month_label || m.month)}</td>
         <td class="num">${Utils.formatNumber(m.order_count)}</td>
         <td class="num">${Utils.formatNumber(m.units_sold)}</td>
-        <td>${Utils.escapeHtml(m.top_platform || '—')}</td>
+        <td>${Utils.escapeHtml(m.top_platform || '&mdash;')}</td>
       </tr>`).join('');
   }
 

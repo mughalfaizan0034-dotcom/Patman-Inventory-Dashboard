@@ -107,7 +107,7 @@ const Settings = (() => {
     try {
       const users = await API.getUsers();
       if (!users.length) {
-        tbody.innerHTML = `<tr><td colspan="5">${Loading.empty('👤', 'No users found')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5">${Loading.empty('user', 'No users found')}</td></tr>`;
         return;
       }
 
@@ -180,13 +180,14 @@ const Settings = (() => {
 
   function _statusRow(label, status, message) {
     const variant = status === 'ok' ? 'success' : status === 'info' ? 'info' : 'error';
-    const icon    = status === 'ok' ? '✓' : status === 'info' ? 'ℹ' : '✕';
+    const iconName  = status === 'ok' ? 'check-circle' : status === 'info' ? 'info' : 'x-circle';
+    const iconColor = status === 'ok' ? 'var(--success)' : status === 'info' ? 'var(--primary)' : 'var(--error)';
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-sm)">
         <span style="font-size:13px;font-weight:500;color:var(--txt-2)">${Utils.escapeHtml(label)}</span>
         <span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--txt-3)">
           ${Utils.escapeHtml(message || '')}
-          ${Utils.badgeHtml(variant, icon)}
+          <i data-lucide="${iconName}" class="icon" style="width:14px;height:14px;color:${iconColor}" aria-hidden="true"></i>
         </span>
       </div>`;
   }
@@ -197,10 +198,10 @@ const Settings = (() => {
     el.innerHTML = `<div style="display:flex;justify-content:center;padding:24px">${Loading.spinnerHtml()}</div>`;
     try {
       const items = await API.getActivity(20);
-      if (!items.length) { el.innerHTML = Loading.empty('📋', 'No activity found'); return; }
+      if (!items.length) { el.innerHTML = Loading.empty('clipboard-list', 'No activity found'); return; }
       el.innerHTML = items.map(item => `
         <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:18px">${Utils.escapeHtml(item.icon || '📄')}</span>
+          <span style="color:var(--txt-4);display:flex;align-items:center"><i data-lucide="clock" class="icon" style="width:16px;height:16px" aria-hidden="true"></i></span>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--txt-1)">${Utils.escapeHtml(item.title)}</div>
             <div style="font-size:11.5px;color:var(--txt-4)">${Utils.timeAgo(item.date)}</div>
@@ -240,7 +241,7 @@ const Settings = (() => {
     try {
       const orgs = await API.getOrganizations();
       if (!orgs.length) {
-        tbody.innerHTML = `<tr><td colspan="4">${Loading.empty('🏢', 'No organizations', 'Create the first organization to get started')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4">${Loading.empty('building-2', 'No organizations', 'Create the first organization to get started')}</td></tr>`;
         return;
       }
       tbody.innerHTML = orgs.map(o => `
@@ -499,7 +500,7 @@ const App = (() => {
              data-membership-id="${Utils.escapeHtml(m.membership_id)}"
              style="padding:10px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:space-between;${m.membership_id === currentOrg?.membership_id ? 'background:var(--surface-2);font-weight:600' : ''}">
           <span>${Utils.escapeHtml(m.display_name)}</span>
-          ${m.membership_id === currentOrg?.membership_id ? '<span style="color:var(--success)">✓</span>' : ''}
+          ${m.membership_id === currentOrg?.membership_id ? '<i data-lucide="check" class="icon" style="width:14px;height:14px;color:var(--success)" aria-hidden="true"></i>' : ''}
         </div>`
       ).join('');
       dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
@@ -550,6 +551,8 @@ const App = (() => {
   async function boot() {
     const loading = document.getElementById('loading-screen');
     if (loading) loading.style.display = 'flex';
+
+    Icons.init(); // process static <i data-lucide> tags + start MutationObserver
 
     Auth.init();
     BoxLookup.init();

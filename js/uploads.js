@@ -36,10 +36,12 @@ const Uploads = (() => {
     const progressWrap = document.getElementById(zoneId.replace('drop-zone-', 'progress-'));
     const progressBar  = progressWrap?.querySelector('.progress-bar');
 
-    // Capture original placeholder text from DOM so reset is always accurate
-    const _origIcon = icon?.textContent || '';
+    // Snapshot original placeholder so reset is always accurate
+    // Use innerHTML to capture the SVG that Lucide renders into .drop-icon
+    const _origIcon = icon?.innerHTML || '';
     const _origText = text?.textContent || '';
     const _origSub  = sub?.textContent  || '';
+    const _lucideIconName = fileType === 'inventory' ? 'package' : 'clipboard-list';
 
     let selectedFile = null;
 
@@ -58,7 +60,7 @@ const Uploads = (() => {
 
       selectedFile = file;
       zone.classList.add('has-file');
-      if (icon)   icon.textContent = '✓';
+      if (icon)   icon.innerHTML = '<i data-lucide="check" class="icon" style="width:32px;height:32px;color:var(--success)" aria-hidden="true"></i>';
       if (text)   text.textContent = file.name;
       if (sub)    sub.textContent  = Utils.formatFileSize(file.size);
       if (fileEl) { fileEl.textContent = 'File ready'; fileEl.style.display = 'block'; }
@@ -70,8 +72,8 @@ const Uploads = (() => {
       input.value  = '';
       zone.classList.remove('has-file');
 
-      // Restore exact original placeholder content from DOM snapshot
-      if (icon)   icon.textContent = _origIcon;
+      // Restore original drop-zone icon
+      if (icon)   icon.innerHTML = _origIcon || `<i data-lucide="${_lucideIconName}" class="icon" style="width:32px;height:32px" aria-hidden="true"></i>`;
       if (text)   text.textContent = _origText;
       if (sub)    sub.textContent  = _origSub;
       if (fileEl) { fileEl.textContent = ''; fileEl.style.display = 'none'; }
@@ -143,10 +145,10 @@ const Uploads = (() => {
 
       if (statusEl) {
         const badges = [
-          added   > 0 ? Utils.badgeHtml('success', `✓ ${added} added`)     : '',
-          updated > 0 ? Utils.badgeHtml('info',    `↻ ${updated} updated`) : '',
-          removed > 0 ? Utils.badgeHtml('gray',    `✕ ${removed} removed`) : '',
-          failed  > 0 ? Utils.badgeHtml('warning', `${failed} failed`)     : '',
+          added   > 0 ? Utils.badgeHtml('success', `${added} added`)   : '',
+          updated > 0 ? Utils.badgeHtml('info',    `${updated} updated`) : '',
+          removed > 0 ? Utils.badgeHtml('gray',    `${removed} removed`) : '',
+          failed  > 0 ? Utils.badgeHtml('warning', `${failed} failed`)   : '',
         ].filter(Boolean).join(' ');
 
         statusEl.innerHTML = `
@@ -159,7 +161,7 @@ const Uploads = (() => {
       loadHistory();
     } catch (err) {
       if (progressBar) progressBar.classList.add('error');
-      if (statusEl) statusEl.innerHTML = `<div class="form-error" style="margin-top:8px">✕ ${Utils.escapeHtml(err.message)}</div>`;
+      if (statusEl) statusEl.innerHTML = `<div class="form-error" style="margin-top:8px">${Utils.escapeHtml(err.message)}</div>`;
       Notify.apiError(err);
     } finally {
       Loading.btn(btn, false);
@@ -228,7 +230,7 @@ const Uploads = (() => {
       const list = Array.isArray(rows) ? rows : (rows.rows || []);
 
       if (!list.length) {
-        tbody.innerHTML = `<tr><td colspan="5" style="padding:0">${Loading.empty('📤', 'No uploads yet')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="padding:0">${Loading.empty('upload', 'No uploads yet')}</td></tr>`;
         return;
       }
 
@@ -319,12 +321,12 @@ const Uploads = (() => {
     const btnId   = `upload-modal-btn-${fileType}`;
 
     const m = new Modal({
-      title:    `📤 Upload ${label} Report`,
+      title:    `Upload ${label} Report`,
       maxWidth: '460px',
       body: `
         <div class="drop-zone" id="${zoneId}" style="margin-bottom:12px">
           <input type="file" id="${inputId}" accept=".txt">
-          <div class="drop-icon">${fileType === 'inventory' ? '📦' : '📋'}</div>
+          <div class="drop-icon"><i data-lucide="${fileType === 'inventory' ? 'package' : 'clipboard-list'}" class="icon" style="width:32px;height:32px" aria-hidden="true"></i></div>
           <div class="drop-text">Drop .txt file here or click to browse</div>
           <div class="drop-sub">UTF-8 tab-delimited TXT (.txt) · Max 10 MB / 100,000 rows</div>
           <div class="drop-file" style="display:none"></div>

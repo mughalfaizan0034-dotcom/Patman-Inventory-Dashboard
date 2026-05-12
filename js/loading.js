@@ -88,10 +88,12 @@ const Loading = {
   },
 
   /* ── Empty state ────────────────────────────────────────── */
-  empty(icon = '📦', text = 'No data found', sub = '') {
+  // icon: a Lucide icon name string (e.g. 'package', 'calendar')
+  empty(icon = 'package', text = 'No data found', sub = '') {
+    const iconHtml = `<i data-lucide="${icon}" class="icon" style="width:32px;height:32px;opacity:.35" aria-hidden="true"></i>`;
     return `
       <div class="empty-state">
-        <div class="empty-icon">${icon}</div>
+        <div class="empty-icon">${iconHtml}</div>
         <div class="empty-text">${Utils.escapeHtml(text)}</div>
         ${sub ? `<div class="empty-sub">${Utils.escapeHtml(sub)}</div>` : ''}
       </div>`;
@@ -104,7 +106,7 @@ const Loading = {
       : '';
     return `
       <div class="empty-state">
-        <div class="empty-icon">⚠️</div>
+        <div class="empty-icon"><i data-lucide="alert-triangle" class="icon" style="width:32px;height:32px;color:var(--error);opacity:.7" aria-hidden="true"></i></div>
         <div class="empty-text">${Utils.escapeHtml(message)}</div>
         ${retryBtn}
       </div>`;

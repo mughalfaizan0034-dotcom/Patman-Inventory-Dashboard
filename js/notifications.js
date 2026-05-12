@@ -17,19 +17,20 @@ const Notify = (() => {
     return container;
   }
 
-  const ICONS = {
-    success: '✓',
-    error:   '✕',
-    warning: '⚠',
-    info:    'ℹ',
+  const ICON_NAMES = {
+    success: 'check-circle',
+    error:   'x-circle',
+    warning: 'alert-triangle',
+    info:    'info',
   };
 
   function show(type, title, message, duration = 4500) {
     const c     = getContainer();
     const toast = document.createElement('div');
     toast.className = `toast toast-${type} anim-slide-right`;
+    const iconName = ICON_NAMES[type] || 'info';
     toast.innerHTML = `
-      <span class="toast-icon">${ICONS[type] || 'ℹ'}</span>
+      <span class="toast-icon"><i data-lucide="${iconName}" class="icon" style="width:16px;height:16px" aria-hidden="true"></i></span>
       <div>
         <div class="toast-title">${Utils.escapeHtml(title)}</div>
         ${message ? `<div class="toast-msg">${Utils.escapeHtml(message)}</div>` : ''}

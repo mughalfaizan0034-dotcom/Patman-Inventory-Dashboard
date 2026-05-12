@@ -194,7 +194,7 @@ const BoxLookup = (() => {
       : document.getElementById('lookup-all');
     if (!el) return;
     el.innerHTML = html || Loading.empty(
-      '📦',
+      'package',
       tab === 'instock' ? 'No in-stock inventory found' : 'No inventory found',
       'Try a different Part Number or UPC'
     );
@@ -365,7 +365,7 @@ const InventoryList = (() => {
     if (!items || !items.length) {
       _selectedSkus.clear();
       _updateDeleteBar();
-      tbody.innerHTML = `<tr><td colspan="${COLS.length}" style="padding:0">${Loading.empty('📦', 'No inventory records', 'Upload inventory data to get started')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${COLS.length}" style="padding:0">${Loading.empty('package', 'No inventory records', 'Upload inventory data to get started')}</td></tr>`;
       if (info) info.textContent = '';
       return;
     }
@@ -405,7 +405,7 @@ const InventoryList = (() => {
         <td>${Utils.formatDate(item.date_added)}</td>
         <td style="font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(item.notes || '—')}</td>
         <td style="width:36px;text-align:center;padding:0 4px">
-          <button class="btn btn-ghost btn-icon btn-sm inv-edit-btn" data-sku="${Utils.escapeHtml(item.sku || '')}" title="Edit" style="opacity:.6">✏️</button>
+          <button class="btn btn-ghost btn-icon btn-sm inv-edit-btn" data-sku="${Utils.escapeHtml(item.sku || '')}" title="Edit" style="opacity:.6"><i data-lucide="pencil" class="icon" style="width:13px;height:13px"></i></button>
         </td>
       </tr>`;
     }).join('');
@@ -603,7 +603,7 @@ const InventoryList = (() => {
       Notify.apiError(err);
     } finally {
       _exporting = false;
-      if (btn) { btn.disabled = false; btn.textContent = '📥 Export'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="download" class="icon" style="width:14px;height:14px"></i> Export'; }
     }
   }
 

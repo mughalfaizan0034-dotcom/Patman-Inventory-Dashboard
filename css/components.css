@@ -480,7 +480,7 @@
 /* ── Performance page sticky filter bar ─────────────────────── */
 .perf-filter-sticky {
   position: sticky;
-  top: var(--topbar-h);
+  top: 0; /* each page is now its own scroll container; topbar is outside */
   z-index: 45;
   background: var(--bg);
   margin: -24px -24px 16px;
@@ -488,4 +488,172 @@
   border-bottom: 1px solid var(--border);
   box-shadow: 0 2px 6px rgba(0,0,0,.05);
   backdrop-filter: blur(6px);
+}
+
+/* ── Dashboard compact KPI strip ────────────────────────────── */
+.dash-kpi-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+
+.dash-kpi-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+.dash-kpi-row:last-child { border-bottom: none; }
+
+.dash-kpi-row-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 8px 14px;
+  min-width: 100px;
+  width: 100px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+.dash-kpi-row-icon  { display: flex; align-items: center; color: var(--txt-3); }
+.dash-kpi-row-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--txt-4);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.dash-kpi-row-metrics {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dash-kpi-row-metrics::-webkit-scrollbar { display: none; }
+
+.dash-kpi-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 16px;
+  border-right: 1px solid var(--border);
+  min-width: 100px;
+  gap: 3px;
+  user-select: none;
+  transition: background var(--dur);
+  flex-shrink: 0;
+}
+.dash-kpi-item:last-child { border-right: none; }
+.dash-kpi-item.clickable  { cursor: pointer; }
+.dash-kpi-item.clickable:hover { background: var(--primary-50); }
+
+.dash-kpi-item-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--txt-4);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+.dash-kpi-item-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--txt-1);
+  font-family: var(--font-title);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.dash-kpi-item-bar-wrap {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.dash-kpi-item-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width .5s var(--ease);
+}
+
+/* ── Dashboard Box Lookup workspace ─────────────────────────── */
+.dash-lookup-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  margin: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.dash-lookup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+.dash-lookup-header-icon  { display: flex; align-items: center; color: var(--txt-3); }
+.dash-lookup-header-title {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt-1);
+}
+
+.dash-lookup-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.dash-lookup-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+/* ── Lucide icon base ───────────────────────────────────────── */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* Inline icon inside buttons — a little right-margin */
+.btn .icon, button .icon { margin-right: 4px; }
+.btn-sm .icon { margin-right: 3px; }
+/* Icon-only buttons — no extra margin */
+.btn-icon-only .icon, .btn .icon:only-child { margin-right: 0; }
+
+/* Numbered step badges in upload guide */
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  padding: 0 3px;
 }

@@ -101,7 +101,8 @@
 /* ── App shell ──────────────────────────────────────────────── */
 #app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── Sidebar ────────────────────────────────────────────────── */
@@ -213,7 +214,8 @@
   margin-left: var(--sidebar-w);
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── Topbar ─────────────────────────────────────────────────── */
@@ -240,10 +242,26 @@
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 
 /* ── Page content ───────────────────────────────────────────── */
-.page-content { flex: 1; padding: 24px; }
+.page-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 
-.page         { display: none; }
-.page.active  { display: block; animation: fadeIn .18s var(--ease); }
+.page        { display: none; }
+.page.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  animation: fadeIn .18s var(--ease);
+}
+/* All pages except dashboard scroll normally with standard padding */
+.page.active:not(#page-dashboard) {
+  padding: 24px;
+  overflow-y: auto;
+}
 
 /* ── Section header ─────────────────────────────────────────── */
 .section-header {
