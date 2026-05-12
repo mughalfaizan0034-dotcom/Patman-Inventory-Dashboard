@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory Dashboard</title>
 
-  <!-- CSS — v=18: bump on every deploy to bust browser/CDN cache -->
-  <link rel="stylesheet" href="css/main.css?v=18">
-  <link rel="stylesheet" href="css/layout.css?v=18">
-  <link rel="stylesheet" href="css/components.css?v=18">
-  <link rel="stylesheet" href="css/tables.css?v=18">
-  <link rel="stylesheet" href="css/forms.css?v=18">
-  <link rel="stylesheet" href="css/animations.css?v=18">
+  <!-- CSS — v=19: bump on every deploy to bust browser/CDN cache -->
+  <link rel="stylesheet" href="css/main.css?v=19">
+  <link rel="stylesheet" href="css/layout.css?v=19">
+  <link rel="stylesheet" href="css/components.css?v=19">
+  <link rel="stylesheet" href="css/tables.css?v=19">
+  <link rel="stylesheet" href="css/forms.css?v=19">
+  <link rel="stylesheet" href="css/animations.css?v=19">
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
@@ -345,7 +345,8 @@
                     <th data-sort="part_number">Part #</th>
                     <th data-sort="upc">UPC</th>
                     <th class="num" data-sort="quantity">Initial Qty</th>
-                    <th class="num" data-sort="units_sold">Units Sold</th>
+                    <th class="num" data-sort="units_sold">Actual Sold</th>
+                    <th class="num">Phantom</th>
                     <th class="num" data-sort="remaining_stock">Remaining</th>
                     <th data-sort="date_added">Date Added</th>
                     <th data-sort="notes">Notes</th>
@@ -665,18 +666,18 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- App modules — order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=18 — bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=18"></script>
-  <script src="js/notifications.js?v=18"></script>
-  <script src="js/loading.js?v=18"></script>
-  <script src="js/api.js?v=18"></script>
-  <script src="js/metricsEngine.js?v=18"></script>
-  <script src="js/auth.js?v=18"></script>
-  <script src="js/dashboard.js?v=18"></script>
-  <script src="js/inventory.js?v=18"></script>
-  <script src="js/orders.js?v=18"></script>
-  <script src="js/uploads.js?v=18"></script>
-  <script src="js/app.js?v=18"></script>
+  <!-- v=19 — bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=19"></script>
+  <script src="js/notifications.js?v=19"></script>
+  <script src="js/loading.js?v=19"></script>
+  <script src="js/api.js?v=19"></script>
+  <script src="js/metricsEngine.js?v=19"></script>
+  <script src="js/auth.js?v=19"></script>
+  <script src="js/dashboard.js?v=19"></script>
+  <script src="js/inventory.js?v=19"></script>
+  <script src="js/orders.js?v=19"></script>
+  <script src="js/uploads.js?v=19"></script>
+  <script src="js/app.js?v=19"></script>
 
 </body>
 </html>

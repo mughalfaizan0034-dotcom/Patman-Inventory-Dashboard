@@ -305,7 +305,7 @@ const InventoryList = (() => {
   let _sortDir       = 'desc';
   let _statusFilter  = 'all';
 
-  const COLS = ['', 'SKU', 'Box #', 'Part #', 'UPC', 'Qty', 'Sold', 'Remaining', 'Date Added', 'Notes', ''];
+  const COLS = ['', 'SKU', 'Box #', 'Part #', 'UPC', 'Qty', 'Actual Sold', 'Phantom', 'Remaining', 'Date Added', 'Notes', ''];
 
   /* ── Undefined SKU check ─────────────────────────────────── */
   function _isUndefined(val) {
@@ -371,14 +371,16 @@ const InventoryList = (() => {
     }
 
     tbody.innerHTML = items.map(item => {
-      const qty       = Number(item.quantity       ?? 0);
-      const sold      = Number(item.units_sold     ?? 0);
-      const remaining = Number(item.remaining_stock ?? qty - sold);
+      const qty       = Number(item.quantity   ?? 0);
+      const rawSold   = Number(item.units_sold ?? 0);
+      const fulfilled = item.fulfilled_units != null ? Number(item.fulfilled_units) : Math.min(rawSold, qty);
+      const phantom   = item.phantom_units   != null ? Number(item.phantom_units)   : Math.max(rawSold - qty, 0);
+      const remaining = Math.max(qty - fulfilled, 0);
       const checked   = _selectedSkus.has(item.sku) ? ' checked' : '';
-      const remColor  = remaining < 0 ? 'color:var(--error);font-weight:700' : remaining === 0 ? 'color:var(--txt-4)' : 'color:var(--success);font-weight:600';
+      const remColor  = remaining === 0 ? 'color:var(--txt-4)' : 'color:var(--success);font-weight:600';
 
       const isUndef    = _isUndefined(item.sku) || _isUndefined(item.upc) || _isUndefined(item.part_number);
-      const isPhantom  = remaining < 0;
+      const isPhantom  = phantom > 0;
       const undefBadge = isUndef ? ` <span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
       const rowBg      = isUndef ? ' style="background:rgba(234,179,8,.06)"' : isPhantom ? ' class="row-phantom"' : '';
 
@@ -397,7 +399,8 @@ const InventoryList = (() => {
         <td>${Utils.escapeHtml(item.part_number || '—')}</td>
         <td>${Utils.escapeHtml(item.upc || '—')}</td>
         <td class="num">${Utils.stockBadge(qty)}</td>
-        <td class="num" style="color:var(--txt-3)">${Utils.formatNumber(sold)}</td>
+        <td class="num" style="color:var(--txt-3)">${Utils.formatNumber(fulfilled)}</td>
+        <td class="num" style="font-weight:600;color:${phantom > 0 ? '#dc2626' : 'var(--txt-4)'}">${Utils.formatNumber(phantom)}</td>
         <td class="num" style="${remColor}">${Utils.formatNumber(remaining)}</td>
         <td>${Utils.formatDate(item.date_added)}</td>
         <td style="font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(item.notes || '—')}</td>

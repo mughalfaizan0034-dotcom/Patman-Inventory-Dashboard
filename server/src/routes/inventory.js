@@ -57,10 +57,13 @@ export async function inventoryRoutes(fastify, { inventoryService, activityServi
       });
 
       const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const header = 'SKU,Box #,Part #,UPC,Initial Qty,Units Sold,Remaining,Date Added,Notes';
+      const header = 'SKU,Box #,Part #,UPC,Initial Qty,Actual Sold,Phantom Units,Actual Remaining,Date Added,Notes';
       const lines  = rows.map(r => [
         r.sku, r.box_number, r.part_number, r.upc,
-        r.quantity, r.units_sold, r.remaining_stock,
+        r.quantity,
+        r.fulfilled_units ?? Math.min(Number(r.units_sold ?? 0), Number(r.quantity ?? 0)),
+        r.phantom_units   ?? Math.max(Number(r.units_sold ?? 0) - Number(r.quantity ?? 0), 0),
+        r.remaining_stock,
         r.date_added, r.notes,
       ].map(esc).join(','));
 

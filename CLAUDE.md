@@ -68,22 +68,38 @@ The system must NOT show `remaining = -5`. That is operationally false.
 | Phantom | ABS of negative remaining | Orders that couldn't be fulfilled |
 | Physical stock | Can go negative | Floored at 0 |
 
+### Canonical Column Structure (enforced across all pages)
+
+Every surface that displays inventory stock data uses the same four derived fields — never raw `units_sold` or uncapped `remaining_stock`:
+
+| Field | Source / Formula | Display label |
+|-------|-----------------|---------------|
+| `initial_stock` / `quantity` | Raw from BigQuery | **Initial** |
+| `fulfilled_units` | `LEAST(units_sold, quantity)` | **Actual Sold** |
+| `phantom_units` | `GREATEST(units_sold - quantity, 0)` | **Phantom** |
+| `remaining_stock` | `GREATEST(quantity - fulfilled_units, 0)` | **Remaining** |
+
+These four fields are computed in BigQuery CTEs and returned by every relevant repository method. Frontend code must never calculate them independently from raw `units_sold` alone — except as a fallback when the old backend (pre-redeploy) returns neither `fulfilled_units` nor `phantom_units`, in which case the frontend derives them identically to the formulas above.
+
 ### Impact Across Pages
 
 **Dashboard KPIs**
-- "Remaining Stock" = physical stock only, never negative
-- "Phantom Units" = unfulfillable demand, not depleted inventory
-- "Units Sold" = fulfilled units only (capped at available stock per SKU)
+- "Actual Remaining" = physical stock only, never negative (`remaining_stock`)
+- "Phantom Units" = unfulfillable demand, not depleted inventory (`phantom_units`)
+- "Actual Sold" = fulfilled units only, capped at available stock per SKU (`fulfilled_units`)
 
-**Inventory List**
-- Remaining column: `MAX(qty - sold, 0)` per row
-- Phantom row highlight applies when oversold demand exists for that SKU
-- Physical stock is never shown as negative
+**Inventory List** — confirmed canonical column order:
+`[ checkbox | SKU | Box # | Part # | UPC | Initial Qty | Actual Sold | Phantom | Remaining | Date Added | Notes | edit ]`
+- `Phantom` column in red when `> 0`, muted (`var(--txt-4)`) when `0`
+- `Remaining` column in green when `> 0`, muted when `0` — never negative, never red
+- Row gets `.row-phantom` class when `phantom_units > 0`
 
-**Box Lookup**
-- Always shows actual physical stock
-- If phantom demand exists for a box, show a warning alongside (e.g. "⚠ 2 oversold units not fulfillable") rather than showing negative remaining
-- Box 164 with 7 units and 0 orders = 7 physical remaining, always
+**Box Lookup** — confirmed canonical column order:
+*UPC summary card:* `[ Initial | Actual Sold | Phantom | Remaining | Status pill ]`
+*Box table:* `[ Box # | Initial | Actual Sold | Phantom | Remaining | Status ]`
+- Status pill: **Phantom** (red) when `phantom > 0`, **In Stock** (green) when `remaining > 0`, **OOS** (orange) otherwise
+- Row gets `.row-phantom` class when `phantom_units > 0`
+- Box 164 with 7 units and 0 orders = 7 remaining, always
 
 **Performance / Analytics**
 - "Units Sold" chart = fulfilled units (demand capped at stock)
@@ -91,7 +107,8 @@ The system must NOT show `remaining = -5`. That is operationally false.
 - Do not subtract phantom from physical inventory in any chart
 
 **Exports**
-- All exports use fulfilled (capped) quantities, not raw order totals
+- CSV columns: `SKU, Box #, Part #, UPC, Initial Qty, Actual Sold, Phantom Units, Actual Remaining, Date Added, Notes`
+- All exports use `fulfilled_units` / `phantom_units`, not raw order totals
 
 ---
 
@@ -158,3 +175,4 @@ Shared CSS class `.row-phantom` in `tables.css`:
 - Hover: `rgba(220, 38, 38, 0.09)`
 - No PHANTOM badge/label on rows — background alone signals the exception
 - Applied identically across Inventory List, Box Lookup, and Orders pages
+- **Trigger:** `phantom_units > 0` (NOT `remaining < 0` — remaining is always floored at 0)

@@ -70,8 +70,10 @@ export function createInventoryRepository({ bq, projectId }) {
       ${cte}
       SELECT
         i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
-        COALESCE(o.units_sold, 0) AS units_sold,
-        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
+        COALESCE(o.units_sold, 0)                                    AS units_sold,
+        LEAST(COALESCE(o.units_sold, 0), i.quantity)                 AS fulfilled_units,
+        GREATEST(COALESCE(o.units_sold, 0) - i.quantity, 0)         AS phantom_units,
+        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0)         AS remaining_stock
       FROM ${invTable} i
       LEFT JOIN ord_summary o ON i.sku = o.effective_sku
       ${where} ${stockCond}
@@ -248,8 +250,10 @@ export function createInventoryRepository({ bq, projectId }) {
       ${cte}
       SELECT
         i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
-        COALESCE(o.units_sold, 0) AS units_sold,
-        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
+        COALESCE(o.units_sold, 0)                                    AS units_sold,
+        LEAST(COALESCE(o.units_sold, 0), i.quantity)                 AS fulfilled_units,
+        GREATEST(COALESCE(o.units_sold, 0) - i.quantity, 0)         AS phantom_units,
+        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0)         AS remaining_stock
       FROM ${invTable} i
       LEFT JOIN ord_summary o ON i.sku = o.effective_sku
       ${where} ${stockCond}

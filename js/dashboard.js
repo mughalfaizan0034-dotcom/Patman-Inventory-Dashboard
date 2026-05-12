@@ -8,19 +8,18 @@ const Dashboard = (() => {
   const INVENTORY_METRICS = [
     {
       rows: [
-        { id: 'dm-total-skus',    label: 'Total SKUs',          field: 'totalSkus',              navigate: 'inventory' },
-        { id: 'dm-total-units',   label: 'Total Units',         field: 'totalUnits',             navigate: 'inventory' },
-        { id: 'dm-remaining',     label: 'Physical Remaining',  field: 'physicalRemainingUnits', navigate: 'inventory', accent: 'green' },
-        { id: 'dm-phantom-units', label: 'Phantom Units',       field: 'phantomUnits',           navigate: 'inventory', action: 'phantom', warnIfPositive: true },
-        { id: 'dm-undef-inv',     label: 'Undefined Rows',      field: 'undefinedSkus',          navigate: 'inventory', action: 'undefined', warnIfPositive: true },
+        { id: 'dm-total-skus',    label: 'Total SKUs',         field: 'totalSkus',              navigate: 'inventory' },
+        { id: 'dm-total-units',   label: 'Total Units',        field: 'totalUnits',             navigate: 'inventory' },
+        { id: 'dm-remaining',     label: 'Actual Remaining',   field: 'physicalRemainingUnits', navigate: 'inventory', accent: 'green' },
+        { id: 'dm-phantom-units', label: 'Phantom Units',      field: 'phantomUnits',           navigate: 'inventory', action: 'phantom', warnIfPositive: true },
+        { id: 'dm-undef-inv',     label: 'Undefined SKUs',     field: 'undefinedSkus',          navigate: 'inventory', action: 'undefined', warnIfPositive: true },
       ],
     },
     {
       divided: true,
       rows: [
-        { id: 'dm-instock-skus',  label: 'In Stock SKUs',       field: 'inStockSkus',            accent: 'green' },
-        { id: 'dm-oos-skus',      label: 'OOS SKUs',            field: 'oosSkus',                accent: 'orange' },
-        { id: 'dm-phantom-skus',  label: 'Oversold SKUs',       field: 'phantomSkus',            warnIfPositive: true },
+        { id: 'dm-instock-skus',  label: 'In Stock SKUs',      field: 'inStockSkus',            accent: 'green' },
+        { id: 'dm-oos-skus',      label: 'OOS SKUs',           field: 'oosSkus',                accent: 'orange' },
       ],
     },
   ];
