@@ -8,12 +8,10 @@ const Orders = (() => {
   let _total       = 0;
   let _loading     = false;
   let _platforms   = [];
-  let _selectedIds = new Set();
   let _sortBy      = 'order_date';
   let _sortDir     = 'desc';
 
-  const DATA_COLS = ['Order Date', 'SKU', 'Qty Sold', 'Shipped SKU', 'Platform', ''];
-  const ALL_COLS  = ['', ...DATA_COLS];
+  const COL_COUNT = 5; // Order Date, SKU, Qty Sold, Shipped SKU, Platform
 
   /* ── SKU parser ──────────────────────────────────────────── */
   function _parseSku(sku) {
@@ -90,16 +88,13 @@ const Orders = (() => {
   /* ── Render table ────────────────────────────────────────── */
   function _renderTable(rows, total) {
     _total = total || 0;
-    const tbody    = document.getElementById('orders-tbody');
-    const info     = document.getElementById('orders-info');
-    const canEdit  = Auth.hasRole('staff');
-    const canDelete = Auth.hasRole('manager');
+    const tbody   = document.getElementById('orders-tbody');
+    const info    = document.getElementById('orders-info');
+    const canEdit = Auth.hasRole('staff');
     if (!tbody) return;
 
     if (!rows || !rows.length) {
-      _selectedIds.clear();
-      _updateDeleteBtn();
-      tbody.innerHTML = `<tr><td colspan="${ALL_COLS.length}" style="padding:0">${Loading.empty('shopping-cart', 'No orders found', 'Adjust your filters or upload order data')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${COL_COUNT}" style="padding:0">${Loading.empty('shopping-cart', 'No orders found', 'Adjust your filters or upload order data')}</td></tr>`;
       if (info) info.textContent = '';
       Pagination.render('orders-pagination', 1, 0, () => {});
       return;
@@ -107,7 +102,6 @@ const Orders = (() => {
 
     tbody.innerHTML = rows.map(row => {
       const id        = row.order_row_id || '';
-      const checked   = _selectedIds.has(id) ? ' checked' : '';
       const isUnknown = !!row.is_unknown;
 
       const parsedSku  = _parseSku(row.sku || '');
@@ -134,9 +128,6 @@ const Orders = (() => {
                 data-qty="${Utils.escapeHtml(String(row.quantity_sold ?? ''))}"
                 data-shipped="${Utils.escapeHtml(shipped)}"
                 data-platform="${Utils.escapeHtml(row.platform || '')}"${trAttr}>
-        <td style="width:36px;text-align:center;padding:0 4px">
-          ${canDelete ? `<input type="checkbox" class="order-row-cb" data-id="${Utils.escapeHtml(id)}"${checked} style="cursor:pointer">` : ''}
-        </td>
         <td>${Utils.escapeHtml(row.order_date || '-')}</td>
         <td style="font-weight:500">${Utils.escapeHtml(row.sku || '-')}</td>
         <td class="num"><strong>${Utils.formatNumber(row.quantity_sold)}</strong></td>
@@ -147,17 +138,6 @@ const Orders = (() => {
       </tr>`;
     }).join('');
 
-    if (canDelete) {
-      tbody.querySelectorAll('.order-row-cb').forEach(cb => {
-        cb.addEventListener('change', () => {
-          if (cb.checked) _selectedIds.add(cb.dataset.id);
-          else _selectedIds.delete(cb.dataset.id);
-          _syncSelectAll();
-          _updateDeleteBtn();
-        });
-      });
-    }
-
     if (canEdit) {
       tbody.querySelectorAll('.order-edit-btn').forEach(btn => {
         btn.addEventListener('click', e => {
@@ -167,10 +147,6 @@ const Orders = (() => {
       });
     }
 
-
-    _syncSelectAll();
-    _updateDeleteBtn();
-
     const ps = CONFIG.getPageSize();
     if (info) {
       const start = ((_page - 1) * ps) + 1;
@@ -179,34 +155,6 @@ const Orders = (() => {
     }
 
     Pagination.render('orders-pagination', _page, Math.ceil(_total / ps), p => { _page = p; load(); });
-  }
-
-  /* ── Selection helpers ───────────────────────────────────── */
-  function _syncSelectAll() {
-    const allCb = document.getElementById('orders-select-all');
-    if (!allCb) return;
-    const boxes = Array.from(document.querySelectorAll('.order-row-cb'));
-    const allChk = boxes.length > 0 && boxes.every(b => b.checked);
-    const anyChk = boxes.some(b => b.checked);
-    allCb.checked       = allChk;
-    allCb.indeterminate = !allChk && anyChk;
-  }
-
-  function _updateDeleteBtn() {
-    const btn = document.getElementById('orders-delete-selected');
-    if (!btn) return;
-    btn.disabled = _selectedIds.size === 0;
-    btn.textContent = _selectedIds.size > 0
-      ? `Delete (${_selectedIds.size} selected)`
-      : 'Delete Selected';
-  }
-
-  function clearSelection() {
-    _selectedIds.clear();
-    document.querySelectorAll('.order-row-cb').forEach(cb => { cb.checked = false; });
-    const allCb = document.getElementById('orders-select-all');
-    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
-    _updateDeleteBtn();
   }
 
   /* ── Fulfillment SKU popover ─────────────────────────────── */
@@ -393,6 +341,7 @@ const Orders = (() => {
             quantity_sold:    parseInt(tr.dataset.qty, 10),
             platform:         tr.dataset.platform,
             shipped_from_box: newShipped,
+            original_sku:     tr.dataset.sku || '',
           });
           tr.dataset.shipped = newShipped;
           Notify.success('Saved', `Fulfillment SKU: ${prevLabel} → ${nextLabel}`);
@@ -418,7 +367,7 @@ const Orders = (() => {
     if (_platforms.length === 0) await _loadPlatforms();
 
     const tbody = document.getElementById('orders-tbody');
-    if (tbody) tbody.innerHTML = Loading.tableRows(ALL_COLS.length, 8);
+    if (tbody) tbody.innerHTML = Loading.tableRows(COL_COUNT, 8);
 
     const ps = CONFIG.getPageSize();
 
@@ -430,7 +379,7 @@ const Orders = (() => {
       });
       _renderTable(data.items || [], data.total || 0);
     } catch (err) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="${ALL_COLS.length}">${Loading.error('Failed to load orders')}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="${COL_COUNT}">${Loading.error('Failed to load orders')}</td></tr>`;
       Notify.apiError(err);
     } finally {
       _loading = false;
@@ -488,47 +437,6 @@ const Orders = (() => {
     load();
   }
 
-  /* ── Bulk delete (selected rows) ─────────────────────────── */
-  function _deleteSelected() {
-    if (_selectedIds.size === 0) return;
-    const ids = Array.from(_selectedIds);
-
-    const modal    = document.getElementById('orders-delete-modal');
-    const msg      = document.getElementById('orders-delete-modal-msg');
-    const confirmB = document.getElementById('orders-delete-confirm');
-    const cancelB  = document.getElementById('orders-delete-cancel');
-    if (!modal) return;
-    if (msg) msg.textContent = `Delete ${ids.length} selected order${ids.length !== 1 ? 's' : ''}? This cannot be undone.`;
-    modal.style.display = 'flex';
-
-    const cleanup = () => { modal.style.display = 'none'; };
-
-    const onConfirm = async () => {
-      confirmB.removeEventListener('click', onConfirm);
-      cancelB.removeEventListener('click', onCancel);
-      cleanup();
-      try {
-        confirmB.disabled = true;
-        const result = await API.deleteOrders({ row_ids: ids });
-        _selectedIds.clear();
-        Notify.success('Deleted', `Removed ${result.deleted ?? '?'} order${result.deleted !== 1 ? 's' : ''}`);
-        _page = 1;
-        load();
-      } catch (err) {
-        Notify.apiError(err);
-      } finally {
-        confirmB.disabled = false;
-      }
-    };
-    const onCancel = () => {
-      confirmB.removeEventListener('click', onConfirm);
-      cancelB.removeEventListener('click', onCancel);
-      cleanup();
-    };
-    confirmB.addEventListener('click', onConfirm);
-    cancelB.addEventListener('click',  onCancel);
-  }
-
   /* ── Export — exports exactly what is currently filtered/visible ── */
   async function _doExport() {
     try {
@@ -547,39 +455,20 @@ const Orders = (() => {
 
   /* ── Init ────────────────────────────────────────────────── */
   function init() {
-    const canDelete    = Auth.hasRole('manager');
-    const resetBtn     = document.getElementById('orders-reset-filters');
-    const exportBtn    = document.getElementById('orders-export');
-    const searchEl     = document.getElementById('orders-search');
-    const selectAll    = document.getElementById('orders-select-all');
-    const deleteSelBtn = document.getElementById('orders-delete-selected');
-    const statusSel    = document.getElementById('filter-order-status');
-    const platSel      = document.getElementById('filter-platform');
-    const dateFrom     = document.getElementById('filter-date-from');
-    const dateTo       = document.getElementById('filter-date-to');
-
-    // Hide deletion controls for non-managers
-    if (selectAll)    selectAll.closest('th').style.display = canDelete ? '' : 'none';
-    if (deleteSelBtn) deleteSelBtn.style.display            = canDelete ? '' : 'none';
+    const resetBtn  = document.getElementById('orders-reset-filters');
+    const exportBtn = document.getElementById('orders-export');
+    const searchEl  = document.getElementById('orders-search');
+    const statusSel = document.getElementById('filter-order-status');
+    const platSel   = document.getElementById('filter-platform');
+    const dateFrom  = document.getElementById('filter-date-from');
+    const dateTo    = document.getElementById('filter-date-to');
 
     if (resetBtn)  resetBtn.addEventListener('click',  _resetFilters);
     if (exportBtn) exportBtn.addEventListener('click', _doExport);
-    if (canDelete && deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
     if (statusSel) statusSel.addEventListener('change', () => { _collectFilters(); _page = 1; load(); });
     if (platSel)   platSel.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
     if (dateFrom)  dateFrom.addEventListener('change',  () => { _collectFilters(); _page = 1; load(); });
     if (dateTo)    dateTo.addEventListener('change',    () => { _collectFilters(); _page = 1; load(); });
-
-    if (canDelete && selectAll) {
-      selectAll.addEventListener('change', () => {
-        document.querySelectorAll('.order-row-cb').forEach(cb => {
-          cb.checked = selectAll.checked;
-          if (selectAll.checked) _selectedIds.add(cb.dataset.id);
-          else                   _selectedIds.delete(cb.dataset.id);
-        });
-        _updateDeleteBtn();
-      });
-    }
 
     if (searchEl) {
       let _debounce;
@@ -593,8 +482,7 @@ const Orders = (() => {
     }
 
     _initSortHeaders();
-    _updateDeleteBtn();
   }
 
-  return { init, load, clearSelection, setStatusFilter };
+  return { init, load, setStatusFilter };
 })();

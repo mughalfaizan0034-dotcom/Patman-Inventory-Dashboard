@@ -4,52 +4,19 @@ export function createOrdersRepository({ bq, projectId }) {
   const table    = `\`${projectId}.${TABLES.ORDERS}\``;
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
 
-  // Reusable SQL: phantom SKU subquery (SKUs where inventory remaining < 0)
-  const _phantomSkuSubquery = () => `
-    SELECT i.sku
-    FROM (
-      SELECT sku, SUM(quantity) AS qty
-      FROM ${invTable}
-      WHERE organization_id = @organizationId
-      GROUP BY sku
-    ) i
-    LEFT JOIN (
-      SELECT
-        CASE
-          WHEN shipped_from_box IS NOT NULL
-               AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-               AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-          THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)),
-                      REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-          ELSE sku
-        END AS effective_sku,
-        SUM(quantity_sold) AS sold
-      FROM ${table}
-      WHERE organization_id = @organizationId
-        AND COALESCE(is_ignored, FALSE) = FALSE
-      GROUP BY effective_sku
-    ) ord ON i.sku = ord.effective_sku
-    WHERE i.qty - COALESCE(ord.sold, 0) < 0
-  `;
-
   // Build the WHERE clause extension for the status filter.
-  // inv_skus CTE must be in scope when the query uses 'unknown' or 'normal'.
+  // Phantom is aggregate-only — never determined at order-row level.
+  // is_ignored rows are excluded from all views (legacy field; no new rows set via API).
   function _statusCondition(status) {
     switch (status) {
-      case 'phantom':
-        return `AND COALESCE(o.mapped_inventory_sku, o.sku) IN (${_phantomSkuSubquery()})
-                AND COALESCE(o.is_ignored, FALSE) = FALSE`;
       case 'unknown':
         return `AND inv.sku IS NULL
                 AND COALESCE(o.is_ignored, FALSE) = FALSE`;
-      case 'ignored':
-        return `AND COALESCE(o.is_ignored, FALSE) = TRUE`;
       case 'normal':
         return `AND inv.sku IS NOT NULL
-                AND COALESCE(o.is_ignored, FALSE) = FALSE
-                AND COALESCE(o.mapped_inventory_sku, o.sku) NOT IN (${_phantomSkuSubquery()})`;
+                AND COALESCE(o.is_ignored, FALSE) = FALSE`;
       default: // 'all'
-        return '';
+        return `AND COALESCE(o.is_ignored, FALSE) = FALSE`;
     }
   }
 
@@ -154,39 +121,6 @@ export function createOrdersRepository({ bq, projectId }) {
     return rows.map(r => r.platform);
   }
 
-  async function ignoreOrder(organizationId, rowId, userId) {
-    const query = `
-      UPDATE ${table}
-      SET
-        is_ignored = TRUE,
-        ignored_at = CURRENT_TIMESTAMP(),
-        ignored_by = @userId
-      WHERE order_row_id = @rowId AND organization_id = @organizationId
-    `;
-    await bq.query({
-      query,
-      params: { organizationId, rowId, userId: userId ?? null },
-      types: { userId: 'STRING' },
-    });
-  }
-
-  async function mapSku(organizationId, rowId, mappedInventorySku, userId) {
-    const query = `
-      UPDATE ${table}
-      SET
-        mapped_inventory_sku = @mappedSku,
-        is_ignored           = FALSE,
-        mapped_at            = CURRENT_TIMESTAMP(),
-        mapped_by            = @userId
-      WHERE order_row_id = @rowId AND organization_id = @organizationId
-    `;
-    await bq.query({
-      query,
-      params: { organizationId, rowId, mappedSku: mappedInventorySku, userId: userId ?? null },
-      types: { userId: 'STRING' },
-    });
-  }
-
   async function deleteByRowIds(organizationId, rowIds) {
     if (!rowIds?.length) return 0;
     const query = `
@@ -240,5 +174,5 @@ export function createOrdersRepository({ bq, projectId }) {
     });
   }
 
-  return { findAll, exportAll, getPlatforms, ignoreOrder, mapSku, deleteByRowIds, deleteByFilters, updateRow };
+  return { findAll, exportAll, getPlatforms, deleteByRowIds, deleteByFilters, updateRow };
 }

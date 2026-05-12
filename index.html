@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory Dashboard</title>
 
-  <!-- CSS â€” v=32: bump on every deploy to bust browser/CDN cache -->
-  <link rel="stylesheet" href="css/main.css?v=32">
-  <link rel="stylesheet" href="css/layout.css?v=32">
-  <link rel="stylesheet" href="css/components.css?v=32">
-  <link rel="stylesheet" href="css/tables.css?v=32">
-  <link rel="stylesheet" href="css/forms.css?v=32">
-  <link rel="stylesheet" href="css/animations.css?v=32">
+  <!-- CSS â€” v=35: bump on every deploy to bust browser/CDN cache -->
+  <link rel="stylesheet" href="css/main.css?v=35">
+  <link rel="stylesheet" href="css/layout.css?v=35">
+  <link rel="stylesheet" href="css/components.css?v=35">
+  <link rel="stylesheet" href="css/tables.css?v=35">
+  <link rel="stylesheet" href="css/forms.css?v=35">
+  <link rel="stylesheet" href="css/animations.css?v=35">
 
   <!-- Favicon: Lucide "package" icon in brand blue -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpolyline points='3.27 6.96 12 12.01 20.73 6.96'/%3E%3Cline x1='12' y1='22.08' x2='12' y2='12'/%3E%3C/svg%3E">
@@ -219,7 +219,7 @@
                 <i data-lucide="search" class="icon" style="width:14px;height:14px"></i>
               </span>
               <input class="form-input search-input" id="box-search-input"
-                placeholder="Search by Part #, UPC, or SKU&hellip;" autocomplete="off" style="padding-left:34px">
+                placeholder="Search by Part # or UPC&hellip;" autocomplete="off" style="padding-left:34px">
             </div>
             <button class="btn btn-ghost btn-sm" id="box-clear-btn" style="display:none">
               <i data-lucide="x" class="icon" style="width:13px;height:13px"></i> Clear
@@ -240,7 +240,7 @@
                   <i data-lucide="search" class="icon" style="width:48px;height:48px"></i>
                 </div>
                 <div class="blookup-empty-title">Search your inventory</div>
-                <div class="blookup-empty-sub">Enter a Part Number, UPC, or SKU above to view inventory allocation across boxes</div>
+                <div class="blookup-empty-sub">Enter a Part Number or UPC above to view inventory allocation across boxes</div>
               </div>
             </div>
             <div id="lookup-all" style="display:none"></div>
@@ -265,7 +265,6 @@
                 <option value="phantom">Phantom SKUs</option>
                 <option value="undefined">Undefined SKUs</option>
               </select>
-              <button class="btn btn-danger btn-sm" id="inv-delete-selected" disabled>Delete Selected</button>
               <button class="btn btn-secondary btn-sm" id="inventory-export-btn">
                 <i data-lucide="download" class="icon" style="width:14px;height:14px"></i> Export
               </button>
@@ -274,13 +273,12 @@
               <table class="data-table" id="inventory-table">
                 <thead>
                   <tr>
-                    <th style="width:36px;text-align:center;padding:0 4px"><input type="checkbox" id="inv-select-all" style="cursor:pointer" title="Select all on this page"></th>
                     <th data-sort="sku">SKU</th>
                     <th data-sort="box_number">Box #</th>
                     <th data-sort="part_number">Part #</th>
                     <th data-sort="upc">UPC</th>
-                    <th class="num" data-sort="quantity">Initial Qty</th>
-                    <th class="num" data-sort="units_sold">Actual Sold</th>
+                    <th class="num" data-sort="quantity">Initial</th>
+                    <th class="num" data-sort="fulfilled_units">Actual Sold</th>
                     <th class="num">Phantom</th>
                     <th class="num" data-sort="remaining_stock">Remaining</th>
                     <th data-sort="date_added">Date Added</th>
@@ -319,7 +317,6 @@
                 <option value="unknown">Unknown SKUs</option>
               </select>
               <button class="btn btn-ghost btn-sm" id="orders-reset-filters">Reset</button>
-              <button class="btn btn-danger btn-sm" id="orders-delete-selected" disabled>Delete Selected</button>
               <button class="btn btn-secondary btn-sm" id="orders-export">
                 <i data-lucide="download" class="icon" style="width:14px;height:14px"></i> Export Orders
               </button>
@@ -328,7 +325,6 @@
               <table class="data-table" id="orders-table">
                 <thead>
                   <tr>
-                    <th style="width:36px;text-align:center;padding:0 4px"><input type="checkbox" id="orders-select-all" style="cursor:pointer" title="Select all on this page"></th>
                     <th data-sort="order_date">Order Date</th>
                     <th data-sort="sku">SKU</th>
                     <th class="num" data-sort="quantity_sold">Qty Sold</th>
@@ -342,18 +338,6 @@
             <div class="pagination">
               <span class="pagination-info" id="orders-info"></span>
               <div id="orders-pagination"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- â”€â”€ Orders delete confirmation modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <div id="orders-delete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
-          <div class="login-card" style="max-width:440px;width:100%;padding:24px 28px">
-            <div style="font-size:15px;font-weight:600;margin-bottom:10px;color:var(--txt-1)">Confirm Delete</div>
-            <p id="orders-delete-modal-msg" style="font-size:13px;color:var(--txt-2);margin:0 0 20px"></p>
-            <div style="display:flex;gap:10px;justify-content:flex-end">
-              <button class="btn btn-ghost btn-sm" id="orders-delete-cancel">Cancel</button>
-              <button class="btn btn-danger btn-sm" id="orders-delete-confirm">Delete</button>
             </div>
           </div>
         </div>
@@ -623,19 +607,21 @@
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
   <!-- App modules â€” order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=32 â€” bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=32"></script>
-  <script src="js/icons.js?v=32"></script>
-  <script src="js/notifications.js?v=32"></script>
-  <script src="js/loading.js?v=32"></script>
-  <script src="js/api.js?v=32"></script>
-  <script src="js/metricsEngine.js?v=32"></script>
-  <script src="js/auth.js?v=32"></script>
-  <script src="js/dashboard.js?v=32"></script>
-  <script src="js/inventory.js?v=32"></script>
-  <script src="js/orders.js?v=32"></script>
-  <script src="js/uploads.js?v=32"></script>
-  <script src="js/app.js?v=32"></script>
+  <!-- v=35 â€” bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=35"></script>
+  <script src="js/icons.js?v=35"></script>
+  <script src="js/notifications.js?v=35"></script>
+  <script src="js/loading.js?v=35"></script>
+  <script src="js/api.js?v=35"></script>
+  <script src="js/metricsEngine.js?v=35"></script>
+  <script src="js/auth.js?v=35"></script>
+  <script src="js/dashboard.js?v=35"></script>
+  <script src="js/inventory.js?v=35"></script>
+  <script src="js/orders.js?v=35"></script>
+  <script src="js/uploads.js?v=35"></script>
+  <script src="js/app.js?v=35"></script>
 
 </body>
 </html>
+
+

@@ -74,23 +74,16 @@ const BoxLookup = (() => {
   }
 
   /* ── Merge boxes with same (box_number, part_number, upc) ── */
-  // Normalizes values from both old backend (units_sold, negative remaining_stock)
-  // and new backend (fulfilled_units, phantom_units, GREATEST-capped remaining_stock).
-  // remaining_stock is always derived as MAX(initial - fulfilled, 0) — never negative.
+  // All fields come from the backend canonical calculation engine.
+  // remaining_stock is always GREATEST(initial - fulfilled, 0) — never negative.
   function _mergeByBox(boxes) {
     const map = new Map();
     for (const b of (boxes || [])) {
-      const key     = `${b.box_number}|${b.part_number}|${b.upc}`;
-      const initial = Number(b.initial_stock ?? 0);
-      // Old backend: returns raw units_sold (may exceed initial); new backend: fulfilled_units/phantom_units
-      const rawOrdered = Number(b.units_sold ?? 0);
-      const fulfilled  = b.fulfilled_units != null
-        ? Number(b.fulfilled_units)
-        : Math.min(rawOrdered, initial);
-      const phantom    = b.phantom_units != null
-        ? Number(b.phantom_units)
-        : Math.max(rawOrdered - initial, 0);
-      const remaining  = Math.max(initial - fulfilled, 0);
+      const key       = `${b.box_number}|${b.part_number}|${b.upc}`;
+      const initial   = Number(b.initial_stock   ?? 0);
+      const fulfilled = Number(b.fulfilled_units  ?? 0);
+      const phantom   = Number(b.phantom_units    ?? 0);
+      const remaining = Number(b.remaining_stock  ?? Math.max(initial - fulfilled, 0));
 
       if (map.has(key)) {
         const m = map.get(key);
@@ -235,7 +228,7 @@ const BoxLookup = (() => {
     const tabsEl    = document.getElementById('lookup-tabs');
 
     if (!query) {
-      if (inStockEl) inStockEl.innerHTML = '';
+      if (inStockEl) inStockEl.innerHTML = Loading.empty('search', 'Search for box inventory', 'Enter a Part Number or UPC above to view inventory allocation across boxes');
       if (allEl)     allEl.innerHTML     = '';
       if (tabsEl)    tabsEl.style.display = 'none';
       if (clearBtn)  clearBtn.style.display = 'none';
@@ -300,12 +293,11 @@ const InventoryList = (() => {
   let _search        = '';
   let _total         = 0;
   let _loading       = false;
-  let _selectedSkus  = new Set();
   let _sortBy        = 'date_added';
   let _sortDir       = 'desc';
   let _statusFilter  = 'all';
 
-  const COLS = ['', 'SKU', 'Box #', 'Part #', 'UPC', 'Qty', 'Actual Sold', 'Phantom', 'Remaining', 'Date Added', 'Notes', ''];
+  const COLS = ['SKU', 'Box #', 'Part #', 'UPC', 'Initial', 'Actual Sold', 'Phantom', 'Remaining', 'Date Added', 'Notes', ''];
 
   /* ── Undefined SKU check ─────────────────────────────────── */
   function _isUndefined(val) {
@@ -358,13 +350,12 @@ const InventoryList = (() => {
   /* ── Render ─────────────────────────────────────────────── */
   function _renderTable(items, total) {
     _total = total || 0;
-    const tbody = document.getElementById('inventory-tbody');
-    const info  = document.getElementById('inventory-info');
+    const tbody   = document.getElementById('inventory-tbody');
+    const info    = document.getElementById('inventory-info');
+    const canEdit = Auth.hasRole('staff');
     if (!tbody) return;
 
     if (!items || !items.length) {
-      _selectedSkus.clear();
-      _updateDeleteBar();
       tbody.innerHTML = `<tr><td colspan="${COLS.length}" style="padding:0">${Loading.empty('package', 'No inventory records', 'Upload inventory data to get started')}</td></tr>`;
       if (info) info.textContent = '';
       return;
@@ -375,8 +366,6 @@ const InventoryList = (() => {
       const fulfilled = Number(item.fulfilled_units ?? 0);
       const phantom   = Number(item.phantom_units   ?? 0);
       const remaining = Number(item.remaining_stock ?? Math.max(qty - fulfilled, 0));
-      const canEdit   = Auth.hasRole('staff');
-      const checked   = _selectedSkus.has(item.sku) ? ' checked' : '';
       const remColor  = remaining === 0 ? 'color:var(--txt-4)' : 'color:var(--success);font-weight:600';
 
       const isUndef    = _isUndefined(item.sku) || _isUndefined(item.upc) || _isUndefined(item.part_number);
@@ -391,9 +380,6 @@ const InventoryList = (() => {
                   data-box="${Utils.escapeHtml(item.box_number || '')}"
                   data-notes="${Utils.escapeHtml(item.notes || '')}"
                   data-date="${Utils.escapeHtml(item.date_added || '')}"${rowBg}>
-        <td style="width:36px;text-align:center;padding:0 4px">
-          ${canEdit ? `<input type="checkbox" class="inv-row-cb" data-sku="${Utils.escapeHtml(item.sku || '')}"${checked} style="cursor:pointer">` : ''}
-        </td>
         <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}</td>
         <td>${Utils.escapeHtml(item.box_number || '—')}</td>
         <td>${Utils.escapeHtml(item.part_number || '—')}</td>
@@ -410,21 +396,11 @@ const InventoryList = (() => {
       </tr>`;
     }).join('');
 
-    tbody.querySelectorAll('.inv-row-cb').forEach(cb => {
-      cb.addEventListener('change', () => {
-        if (cb.checked) _selectedSkus.add(cb.dataset.sku);
-        else            _selectedSkus.delete(cb.dataset.sku);
-        _syncSelectAll();
-        _updateDeleteBar();
+    if (canEdit) {
+      tbody.querySelectorAll('.inv-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => _openEditModal(btn.closest('tr')));
       });
-    });
-
-    tbody.querySelectorAll('.inv-edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => _openEditModal(btn.closest('tr')));
-    });
-
-    _syncSelectAll();
-    _updateDeleteBar();
+    }
 
     const ps = CONFIG.getPageSize();
     if (info) {
@@ -434,26 +410,6 @@ const InventoryList = (() => {
     }
 
     Pagination.render('inventory-pagination', _page, Math.ceil(_total / ps), p => { _page = p; load(); });
-  }
-
-  /* ── Selection helpers ───────────────────────────────────── */
-  function _syncSelectAll() {
-    const allCb = document.getElementById('inv-select-all');
-    if (!allCb) return;
-    const boxes  = Array.from(document.querySelectorAll('.inv-row-cb'));
-    const allChk = boxes.length > 0 && boxes.every(b => b.checked);
-    const anyChk = boxes.some(b => b.checked);
-    allCb.checked       = allChk;
-    allCb.indeterminate = !allChk && anyChk;
-  }
-
-  function _updateDeleteBar() {
-    const btn = document.getElementById('inv-delete-selected');
-    if (!btn) return;
-    btn.disabled = _selectedSkus.size === 0;
-    btn.textContent = _selectedSkus.size > 0
-      ? `Delete (${_selectedSkus.size} selected)`
-      : 'Delete Selected';
   }
 
   /* ── Inline edit modal ───────────────────────────────────── */
@@ -541,28 +497,6 @@ const InventoryList = (() => {
     });
   }
 
-  /* ── Bulk delete ─────────────────────────────────────────── */
-  async function _deleteSelected() {
-    if (_selectedSkus.size === 0) return;
-    const skus = Array.from(_selectedSkus);
-    const confirmed = await Modal.confirm({
-      title:       'Delete Inventory Rows',
-      message:     `Delete ${skus.length} selected inventory ${skus.length === 1 ? 'row' : 'rows'}? This cannot be undone.`,
-      confirmText: 'Delete',
-      danger:      true,
-    });
-    if (!confirmed) return;
-    try {
-      const result = await API.deleteInventoryRows(skus);
-      _selectedSkus.clear();
-      Notify.success('Deleted', `Removed ${result.deleted} inventory ${result.deleted === 1 ? 'row' : 'rows'}`);
-      _page = 1;
-      load();
-    } catch (err) {
-      Notify.apiError(err);
-    }
-  }
-
   /* ── Set filter programmatically (from dashboard KPI clicks) */
   function setStatusFilter(status) {
     _statusFilter = status || 'all';
@@ -627,17 +561,9 @@ const InventoryList = (() => {
   }
 
   function init() {
-    const canEdit      = Auth.hasRole('staff');
-    const canDelete    = Auth.hasRole('manager');
-    const searchInput  = document.getElementById('inventory-search');
-    const statusSel    = document.getElementById('filter-inventory-status');
-    const selectAll    = document.getElementById('inv-select-all');
-    const deleteSelBtn = document.getElementById('inv-delete-selected');
-    const exportBtn    = document.getElementById('inventory-export-btn');
-
-    // Hide mutation controls for viewers
-    if (selectAll)    selectAll.closest('th').style.display    = canEdit ? '' : 'none';
-    if (deleteSelBtn) deleteSelBtn.style.display               = canDelete ? '' : 'none';
+    const searchInput = document.getElementById('inventory-search');
+    const statusSel   = document.getElementById('filter-inventory-status');
+    const exportBtn   = document.getElementById('inventory-export-btn');
 
     if (searchInput) {
       let _debounce;
@@ -654,19 +580,7 @@ const InventoryList = (() => {
       statusSel.addEventListener('change', () => { _statusFilter = statusSel.value; _page = 1; load(); });
     }
 
-    if (canEdit && selectAll) {
-      selectAll.addEventListener('change', () => {
-        document.querySelectorAll('.inv-row-cb').forEach(cb => {
-          cb.checked = selectAll.checked;
-          if (selectAll.checked) _selectedSkus.add(cb.dataset.sku);
-          else                   _selectedSkus.delete(cb.dataset.sku);
-        });
-        _updateDeleteBar();
-      });
-    }
-
-    if (canDelete && deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
-    if (exportBtn)                 exportBtn.addEventListener('click', _doExportInventory);
+    if (exportBtn) exportBtn.addEventListener('click', _doExportInventory);
 
     _initSortHeaders();
   }

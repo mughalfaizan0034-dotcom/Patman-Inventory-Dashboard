@@ -146,6 +146,71 @@
 .progress-bar.success { background: var(--success); }
 .progress-bar.error   { background: var(--error); }
 
+/* ── Upload step indicators ─────────────────────────────────── */
+.upload-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+}
+.upload-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.upload-step:not(:last-child)::after {
+  content: '';
+  display: block;
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  margin: 0 6px;
+}
+.upload-step-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--txt-4);
+  transition: border-color .25s, background .25s;
+}
+.upload-step.active .upload-step-dot {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  animation: step-pulse .9s ease-in-out infinite;
+}
+.upload-step.done .upload-step-dot {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+.upload-step-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--txt-4);
+  white-space: nowrap;
+  transition: color .25s;
+}
+.upload-step.active .upload-step-label { color: var(--primary); }
+.upload-step.done  .upload-step-label  { color: var(--success); }
+@keyframes step-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}
+
 /* ── Upload card ────────────────────────────────────────────── */
 .upload-card {
   background: var(--surface);

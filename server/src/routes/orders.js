@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const positiveInt = z.coerce.number().int().positive();
 
-const STATUS_VALUES = z.enum(['all', 'normal', 'phantom', 'unknown', 'ignored']).optional().default('all');
+const STATUS_VALUES = z.enum(['all', 'normal', 'unknown']).optional().default('all');
 
 const effectiveShippedSku = (sku, shippedFromBox) => {
   if (!sku) return '';
@@ -54,6 +54,7 @@ const patchSchema = z.object({
   quantity_sold:    z.coerce.number().int().positive(),
   platform:         z.string().min(1),
   shipped_from_box: z.string().optional().default(''),
+  original_sku:     z.string().optional().default(''),
 });
 
 export async function ordersRoutes(fastify, { ordersService, activityService }) {
@@ -136,75 +137,27 @@ export async function ordersRoutes(fastify, { ordersService, activityService }) 
     if (!parsed.success) {
       return reply.code(400).send({ success: false, error: 'Invalid body', details: parsed.error.flatten() });
     }
+    const { original_sku, ...rowUpdates } = parsed.data;
     const updates = {
-      ...parsed.data,
-      shipped_from_box: parsed.data.shipped_from_box || null,
+      ...rowUpdates,
+      shipped_from_box: rowUpdates.shipped_from_box || null,
     };
     try {
       await ordersService.updateRow(request.user.organization_id, rowId, updates);
+      const originalLabel  = original_sku || rowId;
+      const reassignedDesc = updates.shipped_from_box
+        ? `Reassigned fulfillment: ${originalLabel} → shipped from box ${updates.shipped_from_box} (order ${rowId})`
+        : `Reverted to original fulfillment SKU for ${originalLabel} (order ${rowId})`;
       activityService?.log({
         organizationId: request.user.organization_id,
         userId:         request.user.user_id,
-        actionType:     'edit_order',
+        actionType:     'reassign_fulfillment_sku',
         entityType:     'orders',
-        description:    updates.shipped_from_box
-          ? `Changed fulfillment SKU to ${updates.shipped_from_box} (order ${rowId})`
-          : `Reverted to original fulfillment SKU (order ${rowId})`,
+        description:    reassignedDesc,
       }).catch(() => {});
       return reply.send({ success: true });
     } catch (err) {
       request.log.error({ err }, 'Order update error');
-      return reply.code(500).send({ success: false, error: 'Internal server error' });
-    }
-  });
-
-  fastify.patch('/:rowId/ignore', { preHandler: [authenticate, requireRole('staff')] }, async (request, reply) => {
-    try {
-      await ordersService.ignoreOrder(
-        request.user.organization_id,
-        request.params.rowId,
-        request.user.user_id,
-      );
-      activityService?.log({
-        organizationId: request.user.organization_id,
-        userId:         request.user.user_id,
-        actionType:     'ignore_order',
-        entityType:     'orders',
-        description:    `Ignored order ${request.params.rowId}`,
-      }).catch(() => {});
-      return reply.send({ success: true });
-    } catch (err) {
-      request.log.error({ err }, 'Order ignore error');
-      return reply.code(500).send({ success: false, error: 'Internal server error' });
-    }
-  });
-
-  const mapSkuBodySchema = z.object({
-    mapped_inventory_sku: z.string().min(1),
-  });
-
-  fastify.patch('/:rowId/map-sku', { preHandler: [authenticate, requireRole('staff')] }, async (request, reply) => {
-    const parsed = mapSkuBodySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ success: false, error: 'mapped_inventory_sku is required' });
-    }
-    try {
-      await ordersService.mapSku(
-        request.user.organization_id,
-        request.params.rowId,
-        parsed.data.mapped_inventory_sku,
-        request.user.user_id,
-      );
-      activityService?.log({
-        organizationId: request.user.organization_id,
-        userId:         request.user.user_id,
-        actionType:     'map_order_sku',
-        entityType:     'orders',
-        description:    `Mapped order ${request.params.rowId} → inventory SKU ${parsed.data.mapped_inventory_sku}`,
-      }).catch(() => {});
-      return reply.send({ success: true });
-    } catch (err) {
-      request.log.error({ err }, 'Order map-sku error');
       return reply.code(500).send({ success: false, error: 'Internal server error' });
     }
   });

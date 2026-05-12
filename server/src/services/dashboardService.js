@@ -11,9 +11,33 @@ function weekLabel(dateVal) {
   return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
+// In-memory KPI cache — keyed by organizationId, auto-expires after TTL.
+const _kpiCache   = new Map();
+const KPI_TTL_MS  = 5 * 60 * 1000; // 5 minutes
+
+function _cacheGet(orgId) {
+  const entry = _kpiCache.get(orgId);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _kpiCache.delete(orgId); return null; }
+  return entry.data;
+}
+
+function _cacheSet(orgId, data) {
+  _kpiCache.set(orgId, { data, expiresAt: Date.now() + KPI_TTL_MS });
+}
+
 export function createDashboardService({ dashboardRepo, metricsService }) {
   async function getKPIs(organizationId) {
-    return metricsService.computeSummary(organizationId);
+    const cached = _cacheGet(organizationId);
+    if (cached) return cached;
+    const data = await metricsService.computeSummary(organizationId);
+    _cacheSet(organizationId, data);
+    return data;
+  }
+
+  function invalidateKPICache(organizationId) {
+    if (organizationId) _kpiCache.delete(organizationId);
+    else _kpiCache.clear();
   }
 
   async function getPerformance(organizationId, weeks, platform = null) {
@@ -63,5 +87,5 @@ export function createDashboardService({ dashboardRepo, metricsService }) {
     };
   }
 
-  return { getKPIs, getPerformance, getInventoryAnalytics };
+  return { getKPIs, getPerformance, getInventoryAnalytics, invalidateKPICache };
 }

@@ -157,7 +157,7 @@ export async function buildApp() {
     fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService, activityService });
     fastify.register(ordersRoutes,        { prefix: '/orders',        ordersService, activityService });
     fastify.register(dashboardRoutes,     { prefix: '/dashboard',     dashboardService });
-    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService });
+    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService, dashboardService });
     fastify.register(usersRoutes,         { prefix: '/users',         usersService });
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
     fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo });

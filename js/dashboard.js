@@ -277,21 +277,40 @@ const Dashboard = (() => {
     }
   }
 
+  function _showChartSkeletons() {
+    const trendWrap = document.getElementById('chart-weekly')?.closest('.chart-wrap');
+    const platBody  = document.getElementById('chart-platform')?.closest('.dash-platform-body');
+    if (trendWrap) trendWrap.innerHTML = `<div class="skel skel-rect" style="width:100%;min-height:220px;border-radius:6px;display:block"></div>`;
+    if (platBody)  platBody.innerHTML  = `<div class="skel skel-rect" style="width:100%;min-height:220px;border-radius:6px;display:block"></div>`;
+  }
+
+  function _restoreChartContainers() {
+    const trendWrap = document.querySelector('.chart-wrap');
+    const platBody  = document.querySelector('.dash-platform-body');
+    if (trendWrap && !document.getElementById('chart-weekly')) {
+      trendWrap.innerHTML = '<canvas id="chart-weekly"></canvas>';
+    }
+    if (platBody && !document.getElementById('chart-platform')) {
+      platBody.innerHTML = `
+        <div class="dash-platform-doughnut"><canvas id="chart-platform"></canvas></div>
+        <div id="platform-legend" class="dash-platform-legend"></div>`;
+    }
+  }
+
   async function _loadCharts() {
-    const container = document.getElementById('dash-charts-container');
-    if (container) Loading.section(container, true);
+    _showChartSkeletons();
     try {
       const [data, platforms] = await Promise.all([
         API.getPerformanceData(_weeksParam(), _platform),
         API.getPlatforms().catch(() => []),
       ]);
+      _restoreChartContainers();
       _populatePlatformSelect(platforms);
       _renderTrendChart(data);
       _renderPlatformChart(data.platforms || []);
     } catch (err) {
+      _restoreChartContainers();
       Notify.apiError(err);
-    } finally {
-      if (container) Loading.section(container, false);
     }
   }
 

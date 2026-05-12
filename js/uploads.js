@@ -115,6 +115,24 @@ const Uploads = (() => {
   }
 
   /* ── Upload logic ───────────────────────────────────────── */
+  const _UPLOAD_STEPS = [
+    { label: 'Parsing',     pct: 18 },
+    { label: 'Validating',  pct: 42 },
+    { label: 'Calculating', pct: 68 },
+    { label: 'Syncing',     pct: 85 },
+  ];
+  const _STEP_DELAYS = [0, 800, 1800, 3000]; // ms after upload starts
+
+  function _stepsHtml(activeIdx) {
+    return `<div class="upload-steps">${
+      _UPLOAD_STEPS.map((s, i) => {
+        const cls  = i < activeIdx ? 'done' : i === activeIdx ? 'active' : '';
+        const icon = i < activeIdx ? '✓' : i === activeIdx ? '●' : '';
+        return `<div class="upload-step ${cls}"><span class="upload-step-dot">${icon}</span><span class="upload-step-label">${s.label}</span></div>`;
+      }).join('')
+    }</div>`;
+  }
+
   async function _doUpload(file, fileType, btn, zoneId) {
     const progressWrap = document.getElementById(zoneId.replace('drop-zone-', 'progress-'));
     const progressBar  = progressWrap?.querySelector('.progress-bar');
@@ -127,12 +145,21 @@ const Uploads = (() => {
 
     const setProgress = pct => { if (progressBar) progressBar.style.width = pct + '%'; };
 
-    try {
-      setProgress(20);
+    // Animate step indicators while request is in-flight
+    const _stepTimers = [];
+    function _advanceStep(idx) {
+      if (statusEl) statusEl.innerHTML = _stepsHtml(idx);
+      setProgress(_UPLOAD_STEPS[idx].pct);
+    }
+    _STEP_DELAYS.forEach((delay, i) => {
+      _stepTimers.push(setTimeout(() => _advanceStep(i), delay));
+    });
 
+    try {
       const apiMethod = fileType === 'inventory' ? API.uploadInventory : API.uploadOrders;
       const result    = await apiMethod(file);
 
+      _stepTimers.forEach(clearTimeout);
       setProgress(100);
       if (progressBar) progressBar.classList.add('success');
 
@@ -145,7 +172,7 @@ const Uploads = (() => {
 
       if (statusEl) {
         const badges = [
-          added   > 0 ? Utils.badgeHtml('success', `${added} added`)   : '',
+          added   > 0 ? Utils.badgeHtml('success', `${added} added`)     : '',
           updated > 0 ? Utils.badgeHtml('info',    `${updated} updated`) : '',
           removed > 0 ? Utils.badgeHtml('gray',    `${removed} removed`) : '',
           failed  > 0 ? Utils.badgeHtml('warning', `${failed} failed`)   : '',
@@ -160,6 +187,7 @@ const Uploads = (() => {
       Notify.success('Upload complete', `${total} row${total !== 1 ? 's' : ''} processed (${added} added, ${updated} updated, ${removed} removed).`);
       loadHistory();
     } catch (err) {
+      _stepTimers.forEach(clearTimeout);
       if (progressBar) progressBar.classList.add('error');
       if (statusEl) statusEl.innerHTML = `<div class="form-error" style="margin-top:8px">${Utils.escapeHtml(err.message)}</div>`;
       Notify.apiError(err);
@@ -257,23 +285,23 @@ const Uploads = (() => {
   /* ── Template downloads ─────────────────────────────────── */
   const _templates = {
     inventory: {
-      filename: 'inventory_template.txt',
+      filename: 'inventory_template.csv',
       content: [
-        'action\tsku\tupc\tquantity\tpart_number\tbox_number\tdate_added\tnotes',
-        'Add\tSKU-001\t012345678901\t25\tPT-123\tBX-001\t2026-05-11\tSample item',
-        'Add\tSKU-002\t098765432109\t10\t\t\t2026-05-11\t',
-        'Update\tSKU-001\t\t30\t\t\t\t',
-        'Remove\tSKU-002\t\t\t\t\t\t',
+        'action,sku,upc,quantity,part_number,box_number,date_added,notes',
+        'Add,SKU-001,012345678901,25,PT-123,BX-001,2026-05-11,Sample item',
+        'Add,SKU-002,098765432109,10,,,2026-05-11,',
+        'Update,SKU-001,,30,,,,',
+        'Remove,SKU-002,,,,,, ',
       ].join('\r\n'),
     },
     orders: {
-      filename: 'orders_template.txt',
+      filename: 'orders_template.csv',
       content: [
-        'action\torder_id\torder_date\tsku\tquantity_sold\tplatform\tshipped_from_box',
-        'Add\t\t2026-05-11\tSKU-001\t2\tAmazon\tBX-001',
-        'Add\t\t2026-05-11\tSKU-002\t1\teBay\t',
-        'Update\tORD-UUID-HERE\t\t\t3\t\t',
-        'Remove\tORD-UUID-HERE\t\t\t\t\t',
+        'action,order_id,order_date,sku,quantity_sold,platform,shipped_from_box',
+        'Add,,2026-05-11,SKU-001,2,Amazon,BX-001',
+        'Add,,2026-05-11,SKU-002,1,eBay,',
+        'Update,ORD-UUID-HERE,,,3,,',
+        'Remove,ORD-UUID-HERE,,,,,',
       ].join('\r\n'),
     },
   };
@@ -285,7 +313,7 @@ const Uploads = (() => {
         const type = link.dataset.downloadTemplate;
         const tpl  = _templates[type];
         if (!tpl) return;
-        const blob = new Blob([tpl.content], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob(['﻿' + tpl.content], { type: 'text/csv;charset=utf-8' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href     = url;
