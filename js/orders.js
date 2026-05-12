@@ -694,68 +694,10 @@ const Orders = (() => {
     cancelB.addEventListener('click',  onCancel);
   }
 
-  /* ── Export modal ────────────────────────────────────────── */
-  function _openExportModal() {
-    const m = new Modal({
-      title: 'Export Orders',
-      body: `
-        <div id="export-modal-content" style="display:grid;gap:10px">
-          <button class="btn btn-secondary btn-sm" data-export="alltime" style="text-align:left;justify-content:flex-start">
-            📥 Download All Time Orders
-          </button>
-          <button class="btn btn-secondary btn-sm" data-export="daterange" style="text-align:left;justify-content:flex-start">
-            📅 Select Date Range…
-          </button>
-        </div>`,
-      footer: `<button class="btn btn-ghost btn-sm" data-action="cancel">Cancel</button>`,
-      maxWidth: '380px',
-    });
-    m.show();
-
-    m.bodyEl.addEventListener('click', async e => {
-      const btn = e.target.closest('[data-export]');
-      if (!btn) return;
-      const mode = btn.dataset.export;
-
-      if (mode === 'alltime') {
-        m.hide(); m.destroy();
-        await _doExport('alltime');
-      } else if (mode === 'daterange') {
-        document.getElementById('export-modal-content').innerHTML = `
-          <div style="display:grid;gap:12px">
-            <div>
-              <label style="font-size:12px;color:var(--txt-3);font-weight:600;display:block;margin-bottom:4px">FROM DATE</label>
-              <input class="form-input" id="export-date-from" type="date">
-            </div>
-            <div>
-              <label style="font-size:12px;color:var(--txt-3);font-weight:600;display:block;margin-bottom:4px">TO DATE</label>
-              <input class="form-input" id="export-date-to" type="date">
-            </div>
-            <button class="btn btn-primary btn-sm" id="export-daterange-dl">Download</button>
-          </div>`;
-        document.getElementById('export-daterange-dl')?.addEventListener('click', async () => {
-          const from = document.getElementById('export-date-from')?.value;
-          const to   = document.getElementById('export-date-to')?.value;
-          m.hide(); m.destroy();
-          await _doExport('daterange', { from, to });
-        });
-      }
-    });
-    m.footerEl.addEventListener('click', e => {
-      if (e.target.closest('[data-action="cancel"]')) { m.hide(); m.destroy(); }
-    });
-  }
-
-  async function _doExport(mode, options = {}) {
+  /* ── Export — exports exactly what is currently filtered/visible ── */
+  async function _doExport() {
     try {
-      const filters = { ..._filters };
-      if (mode === 'daterange') {
-        if (options.from) filters.start_date = options.from;
-        if (options.to)   filters.end_date   = options.to;
-      }
-      filters.sort_by  = _sortBy;
-      filters.sort_dir = _sortDir;
-
+      const filters = { ..._filters, sort_by: _sortBy, sort_dir: _sortDir };
       const blob = await API.exportOrders(filters);
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
@@ -781,7 +723,7 @@ const Orders = (() => {
     const dateTo       = document.getElementById('filter-date-to');
 
     if (resetBtn)     resetBtn.addEventListener('click',     _resetFilters);
-    if (exportBtn)    exportBtn.addEventListener('click',    _openExportModal);
+    if (exportBtn)    exportBtn.addEventListener('click',    _doExport);
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
     if (statusSel)    statusSel.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
     if (platSel)      platSel.addEventListener('change',     () => { _collectFilters(); _page = 1; load(); });
