@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory Dashboard</title>
 
-  <!-- CSS — v=23: bump on every deploy to bust browser/CDN cache -->
-  <link rel="stylesheet" href="css/main.css?v=23">
-  <link rel="stylesheet" href="css/layout.css?v=23">
-  <link rel="stylesheet" href="css/components.css?v=23">
-  <link rel="stylesheet" href="css/tables.css?v=23">
-  <link rel="stylesheet" href="css/forms.css?v=23">
-  <link rel="stylesheet" href="css/animations.css?v=23">
+  <!-- CSS — v=24: bump on every deploy to bust browser/CDN cache -->
+  <link rel="stylesheet" href="css/main.css?v=24">
+  <link rel="stylesheet" href="css/layout.css?v=24">
+  <link rel="stylesheet" href="css/components.css?v=24">
+  <link rel="stylesheet" href="css/tables.css?v=24">
+  <link rel="stylesheet" href="css/forms.css?v=24">
+  <link rel="stylesheet" href="css/animations.css?v=24">
 
   <!-- Favicon: Lucide "package" icon in brand blue -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpolyline points='3.27 6.96 12 12.01 20.73 6.96'/%3E%3Cline x1='12' y1='22.08' x2='12' y2='12'/%3E%3C/svg%3E">
@@ -91,14 +91,6 @@
           <span class="nav-icon"><i data-lucide="layout-dashboard" class="icon" style="width:18px;height:18px"></i></span>
           <span>Dashboard</span>
         </div>
-        <div class="nav-item" data-page="box-lookup">
-          <span class="nav-icon"><i data-lucide="search" class="icon" style="width:18px;height:18px"></i></span>
-          <span>Box Lookup</span>
-        </div>
-        <div class="nav-item" data-page="performance">
-          <span class="nav-icon"><i data-lucide="trending-up" class="icon" style="width:18px;height:18px"></i></span>
-          <span>Performance</span>
-        </div>
         <div class="nav-item" data-page="inventory">
           <span class="nav-icon"><i data-lucide="package" class="icon" style="width:18px;height:18px"></i></span>
           <span>Inventory List</span>
@@ -114,6 +106,10 @@
         <div class="nav-item" data-page="settings" data-min-role="admin">
           <span class="nav-icon"><i data-lucide="settings" class="icon" style="width:18px;height:18px"></i></span>
           <span>Settings</span>
+        </div>
+        <div class="nav-item" data-page="box-lookup">
+          <span class="nav-icon"><i data-lucide="search" class="icon" style="width:18px;height:18px"></i></span>
+          <span>Box Lookup</span>
         </div>
       </nav>
 
@@ -160,7 +156,7 @@
         <!-- ── Dashboard page ───────────────────────────────────────── -->
         <div id="page-dashboard" class="page active">
 
-          <!-- Compact KPI strip: two rows — Inventory and Sales -->
+          <!-- Compact KPI strip: Inventory + Sales rows -->
           <div class="dash-kpi-bar">
             <div class="dash-kpi-row">
               <div class="dash-kpi-row-label">
@@ -178,105 +174,37 @@
             </div>
           </div>
 
-          <!-- Compact analytics: mini weekly trend + platform split -->
-          <div class="dash-analytics-strip">
-            <div class="card dash-analytics-card">
-              <div class="dash-analytics-header">
-                <span class="dash-analytics-title">Weekly Sales Trend</span>
-                <span class="dash-analytics-sub">Last 8 weeks</span>
-              </div>
-              <div class="dash-chart-inner">
-                <canvas id="chart-dash-weekly"></canvas>
-              </div>
-            </div>
-            <div class="card dash-analytics-card">
-              <div class="dash-analytics-header">
-                <span class="dash-analytics-title">Platform Split</span>
-                <span class="dash-analytics-sub">Units sold</span>
-              </div>
-              <div class="dash-platform-inner" id="dash-platform-list">
-                <div style="display:flex;justify-content:center;padding:20px"><div class="spin spin-sm"></div></div>
-              </div>
-            </div>
+          <!-- Analytics filter toolbar -->
+          <div class="dash-filter-bar">
+            <span class="dash-filter-label">Analytics</span>
+            <select class="form-select" id="dash-platform-select" style="width:auto;font-size:12px;padding:5px 10px">
+              <option value="">All Platforms</option>
+            </select>
+            <select class="form-select" id="dash-weeks-select" style="width:auto;font-size:12px;padding:5px 10px">
+              <option value="4">Last 4 weeks</option>
+              <option value="8">Last 8 weeks</option>
+              <option value="12" selected>Last 12 weeks</option>
+              <option value="24">Last 24 weeks</option>
+              <option value="52">Last 52 weeks</option>
+            </select>
           </div>
 
-        </div>
-
-        <!-- ── Box Lookup page ──────────────────────────────────────── -->
-        <div id="page-box-lookup" class="page">
-
-          <!-- Sticky search bar -->
-          <div class="blookup-search">
-            <div style="position:relative;flex:1;min-width:200px;max-width:480px">
-              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4);pointer-events:none;display:flex;align-items:center">
-                <i data-lucide="search" class="icon" style="width:14px;height:14px"></i>
-              </span>
-              <input class="form-input search-input" id="box-search-input"
-                placeholder="Search by Part #, UPC, or SKU&hellip;" autocomplete="off" style="padding-left:34px">
-            </div>
-            <button class="btn btn-ghost btn-sm" id="box-clear-btn" style="display:none">
-              <i data-lucide="x" class="icon" style="width:13px;height:13px"></i> Clear
-            </button>
-          </div>
-
-          <!-- Tabs + results area -->
-          <div class="blookup-body">
-            <!-- Tabs — shown only when there are results -->
-            <div id="lookup-tabs" style="display:none;margin-bottom:14px">
-              <div style="display:flex;gap:0;border-bottom:2px solid var(--border)">
-                <button class="lookup-tab active" data-tab="instock" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary);margin-bottom:-2px">In Stock</button>
-                <button class="lookup-tab" data-tab="all" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--txt-3)">All Boxes</button>
-              </div>
-            </div>
-
-            <!-- Results panels -->
-            <div id="lookup-instock">
-              <!-- Empty state before first search -->
-              <div class="blookup-empty">
-                <div class="blookup-empty-icon">
-                  <i data-lucide="search" class="icon" style="width:48px;height:48px"></i>
-                </div>
-                <div class="blookup-empty-title">Search your inventory</div>
-                <div class="blookup-empty-sub">Enter a Part Number, UPC, or SKU above to view inventory allocation across boxes</div>
-              </div>
-            </div>
-            <div id="lookup-all" style="display:none"></div>
-          </div>
-
-        </div>
-
-        <!-- ── Performance page ─────────────────────────────────────── -->
-        <div id="page-performance" class="page">
-          <div class="perf-filter-sticky">
-            <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
-              <select class="form-select" id="perf-platform-select" style="width:auto">
-                <option value="">All Platforms</option>
-              </select>
-              <select class="form-select" id="perf-weeks-select" style="width:auto">
-                <option value="4">Last 4 weeks</option>
-                <option value="8">Last 8 weeks</option>
-                <option value="12" selected>Last 12 weeks</option>
-                <option value="24">Last 24 weeks</option>
-                <option value="52">Last 52 weeks</option>
-              </select>
-            </div>
-          </div>
-
-          <div id="perf-container" style="position:relative">
+          <!-- Charts area — scrollable, fills remaining height -->
+          <div class="dash-charts-area" id="dash-charts-container">
 
             <!-- Weekly Sales — full width -->
-            <div class="card" style="margin-bottom:16px">
+            <div class="card" style="margin-bottom:14px">
               <div class="card-header"><div class="card-title">Weekly Sales</div></div>
               <div class="chart-wrap"><canvas id="chart-weekly"></canvas></div>
             </div>
 
             <!-- Platform chart + Monthly summary — responsive 2-col grid -->
-            <div class="perf-charts-row">
+            <div class="dash-charts-row">
 
               <!-- Sales by Platform -->
               <div class="card">
                 <div class="card-header"><div class="card-title">Sales by Platform</div></div>
-                <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:0 4px 8px">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:0 4px 8px">
                   <div style="width:200px;height:200px;flex-shrink:0">
                     <canvas id="chart-platform"></canvas>
                   </div>
@@ -306,6 +234,46 @@
 
             </div>
           </div>
+
+        </div>
+
+        <!-- ── Box Lookup page ──────────────────────────────────────── -->
+        <div id="page-box-lookup" class="page">
+
+          <!-- Sticky search bar -->
+          <div class="blookup-search">
+            <div style="position:relative;flex:1;min-width:200px;max-width:480px">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-4);pointer-events:none;display:flex;align-items:center">
+                <i data-lucide="search" class="icon" style="width:14px;height:14px"></i>
+              </span>
+              <input class="form-input search-input" id="box-search-input"
+                placeholder="Search by Part #, UPC, or SKU&hellip;" autocomplete="off" style="padding-left:34px">
+            </div>
+            <button class="btn btn-ghost btn-sm" id="box-clear-btn" style="display:none">
+              <i data-lucide="x" class="icon" style="width:13px;height:13px"></i> Clear
+            </button>
+          </div>
+
+          <!-- Tabs + results area -->
+          <div class="blookup-body">
+            <div id="lookup-tabs" style="display:none;margin-bottom:14px">
+              <div style="display:flex;gap:0;border-bottom:2px solid var(--border)">
+                <button class="lookup-tab active" data-tab="instock" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary);margin-bottom:-2px">In Stock</button>
+                <button class="lookup-tab" data-tab="all" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--txt-3)">All Boxes</button>
+              </div>
+            </div>
+            <div id="lookup-instock">
+              <div class="blookup-empty">
+                <div class="blookup-empty-icon">
+                  <i data-lucide="search" class="icon" style="width:48px;height:48px"></i>
+                </div>
+                <div class="blookup-empty-title">Search your inventory</div>
+                <div class="blookup-empty-sub">Enter a Part Number, UPC, or SKU above to view inventory allocation across boxes</div>
+              </div>
+            </div>
+            <div id="lookup-all" style="display:none"></div>
+          </div>
+
         </div>
 
         <!-- ── Inventory List page ──────────────────────────────────── -->
@@ -329,7 +297,6 @@
                 <i data-lucide="download" class="icon" style="width:14px;height:14px"></i> Export
               </button>
             </div>
-            <!-- Inventory selection bar -->
             <div id="inv-delete-bar" style="display:none;align-items:center;gap:10px;padding:8px 16px;background:var(--warning-bg,#fffbeb);border-bottom:1px solid var(--warning-bd,#fde68a)">
               <span id="inv-selected-count" style="font-size:13px;font-weight:500;color:var(--txt-2)">0 selected</span>
               <button class="btn btn-danger btn-sm" id="inv-delete-selected">Delete Selected</button>
@@ -410,7 +377,7 @@
           </div>
         </div>
 
-        <!-- ── Orders delete confirmation modal ──────────────────── -->
+        <!-- ── Orders delete confirmation modal ──────────────────────── -->
         <div id="orders-delete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
           <div class="login-card" style="max-width:440px;width:100%;padding:24px 28px">
             <div style="font-size:15px;font-weight:600;margin-bottom:10px;color:var(--txt-1)">Confirm Delete</div>
@@ -678,19 +645,19 @@
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
   <!-- App modules — order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=23 — bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=23"></script>
-  <script src="js/icons.js?v=23"></script>
-  <script src="js/notifications.js?v=23"></script>
-  <script src="js/loading.js?v=23"></script>
-  <script src="js/api.js?v=23"></script>
-  <script src="js/metricsEngine.js?v=23"></script>
-  <script src="js/auth.js?v=23"></script>
-  <script src="js/dashboard.js?v=23"></script>
-  <script src="js/inventory.js?v=23"></script>
-  <script src="js/orders.js?v=23"></script>
-  <script src="js/uploads.js?v=23"></script>
-  <script src="js/app.js?v=23"></script>
+  <!-- v=24 — bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=24"></script>
+  <script src="js/icons.js?v=24"></script>
+  <script src="js/notifications.js?v=24"></script>
+  <script src="js/loading.js?v=24"></script>
+  <script src="js/api.js?v=24"></script>
+  <script src="js/metricsEngine.js?v=24"></script>
+  <script src="js/auth.js?v=24"></script>
+  <script src="js/dashboard.js?v=24"></script>
+  <script src="js/inventory.js?v=24"></script>
+  <script src="js/orders.js?v=24"></script>
+  <script src="js/uploads.js?v=24"></script>
+  <script src="js/app.js?v=24"></script>
 
 </body>
 </html>

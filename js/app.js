@@ -412,13 +412,12 @@ const Settings = (() => {
 /* ── App router ─────────────────────────────────────────────── */
 const App = (() => {
   const PAGES = {
-    dashboard:  { label: 'Dashboard',       init: () => Dashboard.load() },
+    dashboard:   { label: 'Dashboard',      init: () => Dashboard.load() },
+    inventory:   { label: 'Inventory List', init: () => InventoryList.load() },
+    orders:      { label: 'Orders',         init: () => Orders.load() },
+    uploads:     { label: 'Uploads',        init: () => Uploads.loadHistory() },
+    settings:    { label: 'Settings',       init: () => Settings.loadUsers() },
     'box-lookup':{ label: 'Box Lookup',     init: () => {} },
-    performance:{ label: 'Performance',     init: () => Perf.load() },
-    inventory:  { label: 'Inventory List',  init: () => InventoryList.load() },
-    orders:     { label: 'Orders',          init: () => Orders.load() },
-    uploads:    { label: 'Uploads',         init: () => Uploads.loadHistory() },
-    settings:   { label: 'Settings',        init: () => Settings.loadUsers() },
   };
 
   let _currentPage  = null;
@@ -444,7 +443,7 @@ const App = (() => {
     if (!_initialized[pageId]) {
       _initialized[pageId] = true;
       PAGES[pageId].init?.();
-    } else if (['dashboard', 'performance'].includes(pageId)) {
+    } else if (pageId === 'dashboard') {
       PAGES[pageId].init?.();
     }
 
@@ -556,12 +555,12 @@ const App = (() => {
     Icons.init(); // process static <i data-lucide> tags + start MutationObserver
 
     Auth.init();
+    Dashboard.init();
     BoxLookup.init();
     InventoryList.init();
     Orders.init();
     Uploads.init();
     Settings.init();
-    Perf.init();
     _bindNav();
 
     const ok = await Auth.checkSession();

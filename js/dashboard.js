@@ -1,22 +1,19 @@
 /* ============================================================
-   dashboard.js — KPI strip, dashboard page, performance charts
+   dashboard.js — Dashboard: KPI strip + full analytics/charts
    ============================================================ */
 
-/* ── Dashboard (Overview page) ──────────────────────────────── */
 const Dashboard = (() => {
-  let _dashMiniChart = null;
 
-  /* Inventory row: Total SKUs | In Stock (bar) | OOS (bar) | Total Units | Remaining (bar) | Undefined SKUs */
+  /* ── KPI metric definitions ──────────────────────────────── */
   const INVENTORY_METRICS = [
-    { id: 'dm-total-skus',   label: 'Total SKUs',    field: 'totalSkus',              navigate: 'inventory' },
-    { id: 'dm-instock-skus', label: 'In Stock',      field: 'inStockSkus',            barOf: 'totalSkus',  barColor: '#16a34a', accent: 'green' },
-    { id: 'dm-oos-skus',     label: 'OOS',           field: 'oosSkus',                barOf: 'totalSkus',  barColor: '#ea580c', accent: 'orange' },
-    { id: 'dm-total-units',  label: 'Total Units',   field: 'totalUnits',             navigate: 'inventory' },
-    { id: 'dm-remaining',    label: 'Remaining',     field: 'physicalRemainingUnits', barOf: 'totalUnits', barColor: '#16a34a', accent: 'green', navigate: 'inventory' },
-    { id: 'dm-undef-inv',    label: 'Undefined SKUs',field: 'undefinedSkus',          navigate: 'inventory', action: 'undefined', warnIfPositive: true },
+    { id: 'dm-total-skus',   label: 'Total SKUs',     field: 'totalSkus',              navigate: 'inventory' },
+    { id: 'dm-instock-skus', label: 'In Stock',       field: 'inStockSkus',            barOf: 'totalSkus',  barColor: '#16a34a', accent: 'green' },
+    { id: 'dm-oos-skus',     label: 'OOS',            field: 'oosSkus',                barOf: 'totalSkus',  barColor: '#ea580c', accent: 'orange' },
+    { id: 'dm-total-units',  label: 'Total Units',    field: 'totalUnits',             navigate: 'inventory' },
+    { id: 'dm-remaining',    label: 'Remaining',      field: 'physicalRemainingUnits', barOf: 'totalUnits', barColor: '#16a34a', accent: 'green', navigate: 'inventory' },
+    { id: 'dm-undef-inv',    label: 'Undefined SKUs', field: 'undefinedSkus',          navigate: 'inventory', action: 'undefined', warnIfPositive: true },
   ];
 
-  /* Sales row: Total Orders | Units Sold | Actual Sold | Phantom Units | Unknown SKU Orders */
   const SALES_METRICS = [
     { id: 'dm-total-orders', label: 'Total Orders',       field: 'totalOrders',        navigate: 'orders' },
     { id: 'dm-units-sold',   label: 'Units Sold',         field: 'unitsSold',          navigate: 'orders' },
@@ -25,6 +22,15 @@ const Dashboard = (() => {
     { id: 'dm-undef-orders', label: 'Unknown SKU Orders', field: 'undefinedSkuOrders', navigate: 'orders', action: 'unknown_orders', warnIfPositive: true },
   ];
 
+  /* ── Chart + filter state ────────────────────────────────── */
+  let _weeklyChart   = null;
+  let _platformChart = null;
+  let _weeks         = 12;
+  let _platform      = '';
+
+  const PLATFORM_COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#64748b'];
+
+  /* ── KPI rendering ───────────────────────────────────────── */
   function _valueColor(def, val) {
     if (def.warnIfPositive && val > 0) return 'var(--error)';
     if (def.accent === 'green')  return '#16a34a';
@@ -71,8 +77,7 @@ const Dashboard = (() => {
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    const isLoading = !data;
-    el.innerHTML = isLoading
+    el.innerHTML = !data
       ? metrics.map(_skeletonItem).join('')
       : metrics.map(def => _metricItem(def, data)).join('');
 
@@ -81,146 +86,20 @@ const Dashboard = (() => {
         item.addEventListener('click', () => {
           App.navigate(item.dataset.navigate);
           const action = item.dataset.action;
-          if (action === 'undefined')          setTimeout(() => InventoryList.setStatusFilter?.('undefined'), 60);
+          if (action === 'undefined')           setTimeout(() => InventoryList.setStatusFilter?.('undefined'), 60);
           else if (action === 'unknown_orders') setTimeout(() => Orders.setStatusFilter?.('unknown'), 60);
         });
       });
     }
   }
 
-  /* ── Mini analytics helpers ─────────────────────────────── */
-  function _renderMiniWeekly(weekly) {
-    const canvas = document.getElementById('chart-dash-weekly');
-    if (!canvas) return;
-    if (_dashMiniChart) { _dashMiniChart.destroy(); _dashMiniChart = null; }
-
-    const recent = weekly.slice(-8);
-    _dashMiniChart = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: recent.map(w => w.week_label || ''),
-        datasets: [{
-          data: recent.map(w => w.units_sold || 0),
-          backgroundColor: 'rgba(37,99,235,0.12)',
-          borderColor: '#2563eb',
-          borderWidth: 1.5,
-          borderRadius: 3,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${Utils.formatNumber(ctx.parsed.y)} units` } },
-        },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 9.5 }, color: '#94a3b8', maxRotation: 0 } },
-          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { size: 9.5 }, color: '#94a3b8' } },
-        },
-      },
-    });
-  }
-
-  function _renderPlatformList(platforms) {
-    const el = document.getElementById('dash-platform-list');
-    if (!el) return;
-
-    if (!platforms.length) {
-      el.innerHTML = '<div style="color:var(--txt-4);font-size:12px;padding:20px 0;text-align:center">No platform data</div>';
-      return;
-    }
-
-    const total  = platforms.reduce((s, p) => s + (p.units_sold || 0), 0);
-    const COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
-
-    el.innerHTML = platforms.slice(0, 7).map((p, i) => {
-      const pct   = total > 0 ? Math.round(p.units_sold / total * 100) : 0;
-      const color = COLORS[i % COLORS.length];
-      return `
-        <div style="margin-bottom:9px">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-            <span style="font-size:12px;font-weight:500;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${Utils.escapeHtml(p.platform)}</span>
-            <span style="font-size:11px;color:var(--txt-4);flex-shrink:0">${Utils.formatNumber(p.units_sold)}</span>
-          </div>
-          <div style="height:4px;background:var(--border);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .6s var(--ease)"></div>
-          </div>
-        </div>`;
-    }).join('');
-  }
-
-  async function _loadAnalytics() {
-    try {
-      const data = await API.getPerformanceData(8, '');
-      _renderMiniWeekly(data.weekly    || []);
-      _renderPlatformList(data.platforms || []);
-    } catch (_) { /* analytics are bonus — fail silently */ }
-  }
-
-  async function load() {
-    _renderPanel('panel-inventory-intel', INVENTORY_METRICS, null);
-    _renderPanel('panel-sales-intel',     SALES_METRICS,     null);
-
-    const platEl = document.getElementById('dash-platform-list');
-    if (platEl) platEl.innerHTML = '<div style="display:flex;justify-content:center;padding:20px"><div class="spin spin-sm"></div></div>';
-
-    try {
-      const [kpiData] = await Promise.all([
-        MetricsEngine.load(),
-        _loadAnalytics(),
-      ]);
-      _renderPanel('panel-inventory-intel', INVENTORY_METRICS, kpiData);
-      _renderPanel('panel-sales-intel',     SALES_METRICS,     kpiData);
-
-      const lastSyncEl = document.getElementById('last-sync-time');
-      if (lastSyncEl) lastSyncEl.textContent = 'Updated ' + Utils.timeAgo(new Date().toISOString());
-    } catch (err) {
-      const inv = document.getElementById('panel-inventory-intel');
-      if (inv) inv.innerHTML = Loading.error('Failed to load dashboard data', load);
-      Notify.apiError(err);
-    }
-  }
-
-  return { load };
-})();
-
-/* ── Performance page ───────────────────────────────────────── */
-const Perf = (() => {
-  let _weeklyChart   = null;
-  let _platformChart = null;
-  let _weeks         = 12;
-  let _platform      = '';
-
-  const PLATFORM_COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#64748b'];
-
-  async function load() {
-    const container = document.getElementById('perf-container');
-    if (container) Loading.section(container, true);
-
-    try {
-      const [data, platforms] = await Promise.all([
-        API.getPerformanceData(_weeks, _platform),
-        API.getPlatforms().catch(() => []),
-      ]);
-
-      _populatePlatformSelect(platforms);
-      _renderWeeklyChart(data.weekly    || []);
-      _renderPlatformChart(data.platforms || []);
-      _renderMonthlyTable(data.monthly  || []);
-    } catch (err) {
-      Notify.apiError(err);
-    } finally {
-      if (container) Loading.section(container, false);
-    }
-  }
-
+  /* ── Chart rendering ─────────────────────────────────────── */
   function _populatePlatformSelect(platforms) {
-    const sel = document.getElementById('perf-platform-select');
+    const sel = document.getElementById('dash-platform-select');
     if (!sel || sel.options.length > 1) return;
     platforms.forEach(p => {
       const opt = document.createElement('option');
-      opt.value = p;
+      opt.value       = p;
       opt.textContent = p;
       sel.appendChild(opt);
     });
@@ -230,7 +109,6 @@ const Perf = (() => {
   function _renderWeeklyChart(weekly) {
     const canvas = document.getElementById('chart-weekly');
     if (!canvas) return;
-
     if (_weeklyChart) _weeklyChart.destroy();
 
     const labels = weekly.map(w => w.week_label || w.week_start || '');
@@ -272,7 +150,7 @@ const Perf = (() => {
         plugins: { legend: { display: true } },
         scales: {
           y:  { position: 'left',  beginAtZero: true, grid: { color: 'rgba(0,0,0,.05)' }, title: { display: true, text: 'Units Sold' } },
-          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Orders' } },
+          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },   title: { display: true, text: 'Orders' } },
         },
       },
     });
@@ -282,11 +160,10 @@ const Perf = (() => {
     const canvas   = document.getElementById('chart-platform');
     const legendEl = document.getElementById('platform-legend');
     if (!canvas) return;
-
     if (_platformChart) _platformChart.destroy();
 
     if (!platforms.length) {
-      if (legendEl) legendEl.innerHTML = `<div style="color:var(--txt-4);font-size:13px;padding:12px 0">No platform data</div>`;
+      if (legendEl) legendEl.innerHTML = '<div style="color:var(--txt-4);font-size:13px;padding:12px 0">No platform data</div>';
       return;
     }
 
@@ -327,14 +204,14 @@ const Perf = (() => {
         const pct   = total > 0 ? Math.round(p.units_sold / total * 100) : 0;
         const color = PLATFORM_COLORS[i % PLATFORM_COLORS.length];
         return `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border)">
-            <span style="display:flex;align-items:center;gap:10px">
-              <span style="width:12px;height:12px;border-radius:3px;background:${color};flex-shrink:0"></span>
-              <span style="font-size:14px;font-weight:500;color:var(--txt-2)">${Utils.escapeHtml(p.platform)}</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+            <span style="display:flex;align-items:center;gap:8px">
+              <span style="width:10px;height:10px;border-radius:2px;background:${color};flex-shrink:0"></span>
+              <span style="font-size:13px;font-weight:500;color:var(--txt-2)">${Utils.escapeHtml(p.platform)}</span>
             </span>
-            <span style="display:flex;align-items:center;gap:14px">
-              <span style="font-size:12px;color:var(--txt-4);min-width:32px;text-align:right">${pct}%</span>
-              <span style="font-size:15px;font-weight:700;color:var(--txt-1);min-width:64px;text-align:right">${Utils.formatNumber(p.units_sold)}</span>
+            <span style="display:flex;align-items:center;gap:12px">
+              <span style="font-size:12px;color:var(--txt-4);min-width:28px;text-align:right">${pct}%</span>
+              <span style="font-size:14px;font-weight:700;color:var(--txt-1);min-width:56px;text-align:right">${Utils.formatNumber(p.units_sold)}</span>
             </span>
           </div>`;
       }).join('');
@@ -348,31 +225,60 @@ const Perf = (() => {
       tbody.innerHTML = `<tr><td colspan="4">${Loading.empty('calendar', 'No data')}</td></tr>`;
       return;
     }
-
     tbody.innerHTML = monthly.map(m => `
       <tr>
         <td>${Utils.escapeHtml(m.month_label || m.month)}</td>
         <td class="num">${Utils.formatNumber(m.order_count)}</td>
         <td class="num">${Utils.formatNumber(m.units_sold)}</td>
-        <td>${Utils.escapeHtml(m.top_platform || '&mdash;')}</td>
+        <td>${Utils.escapeHtml(m.top_platform || '—')}</td>
       </tr>`).join('');
   }
 
-  function setWeeks(w) {
-    _weeks = parseInt(w) || 12;
-    load();
+  /* ── Data loaders ────────────────────────────────────────── */
+  async function _loadKPIs() {
+    _renderPanel('panel-inventory-intel', INVENTORY_METRICS, null);
+    _renderPanel('panel-sales-intel',     SALES_METRICS,     null);
+    try {
+      const kpiData = await MetricsEngine.load();
+      _renderPanel('panel-inventory-intel', INVENTORY_METRICS, kpiData);
+      _renderPanel('panel-sales-intel',     SALES_METRICS,     kpiData);
+      const el = document.getElementById('last-sync-time');
+      if (el) el.textContent = 'Updated ' + Utils.timeAgo(new Date().toISOString());
+    } catch (err) {
+      const el = document.getElementById('panel-inventory-intel');
+      if (el) el.innerHTML = Loading.error('Failed to load KPI data', load);
+      Notify.apiError(err);
+    }
   }
 
-  function setPlatform(p) {
-    _platform = p || '';
-    load();
+  async function _loadCharts() {
+    const container = document.getElementById('dash-charts-container');
+    if (container) Loading.section(container, true);
+    try {
+      const [data, platforms] = await Promise.all([
+        API.getPerformanceData(_weeks, _platform),
+        API.getPlatforms().catch(() => []),
+      ]);
+      _populatePlatformSelect(platforms);
+      _renderWeeklyChart(data.weekly     || []);
+      _renderPlatformChart(data.platforms || []);
+      _renderMonthlyTable(data.monthly   || []);
+    } catch (err) {
+      Notify.apiError(err);
+    } finally {
+      if (container) Loading.section(container, false);
+    }
+  }
+
+  async function load() {
+    await Promise.all([_loadKPIs(), _loadCharts()]);
   }
 
   function init() {
-    const sel     = document.getElementById('perf-weeks-select');
-    const platSel = document.getElementById('perf-platform-select');
-    if (sel)     sel.addEventListener('change', e => setWeeks(e.target.value));
-    if (platSel) platSel.addEventListener('change', e => setPlatform(e.target.value));
+    const platSel  = document.getElementById('dash-platform-select');
+    const weeksSel = document.getElementById('dash-weeks-select');
+    if (platSel)  platSel.addEventListener('change',  e => { _platform = e.target.value || ''; _loadCharts(); });
+    if (weeksSel) weeksSel.addEventListener('change', e => { _weeks    = parseInt(e.target.value) || 12; _loadCharts(); });
   }
 
   return { load, init };
