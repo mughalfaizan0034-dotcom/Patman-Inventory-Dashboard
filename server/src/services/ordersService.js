@@ -34,5 +34,13 @@ export function createOrdersService({ ordersRepo }) {
     return ordersRepo.exportAll({ organizationId, ...filters });
   }
 
-  return { list, exportAll, getPlatforms, deleteRows, updateRow };
+  async function ignoreOrder(organizationId, rowId, userId) {
+    await ordersRepo.ignoreOrder(organizationId, rowId, userId);
+  }
+
+  async function mapSku(organizationId, rowId, mappedInventorySku, userId) {
+    await ordersRepo.mapSku(organizationId, rowId, mappedInventorySku, userId);
+  }
+
+  return { list, exportAll, getPlatforms, deleteRows, updateRow, ignoreOrder, mapSku };
 }

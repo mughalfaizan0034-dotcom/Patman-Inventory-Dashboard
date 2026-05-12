@@ -16,7 +16,7 @@ const Dashboard = (() => {
   const SALES_KPIS = [
     { id: 'kpi-units-sold',       label: 'Units Sold',           icon: '🛒', color: 'orange', field: 'unitsSold',          format: 'number', navigate: 'orders' },
     { id: 'kpi-total-orders',     label: 'Total Orders',         icon: '📋', color: 'cyan',   field: 'totalOrders',        format: 'number', navigate: 'orders' },
-    { id: 'kpi-undefined-orders', label: 'Undefined SKU Orders', icon: '❓', color: 'pink',   field: 'undefinedSkuOrders', format: 'number', navigate: 'orders' },
+    { id: 'kpi-undefined-orders', label: 'Undefined SKU Orders', icon: '❓', color: 'pink',   field: 'undefinedSkuOrders', format: 'number', navigate: 'orders', action: 'unknown_orders' },
   ];
 
   function _renderSkeletons() {
@@ -63,6 +63,8 @@ const Dashboard = (() => {
           setTimeout(() => InventoryList.setStatusFilter?.('phantom'), 60);
         } else if (action === 'undefined') {
           setTimeout(() => InventoryList.setStatusFilter?.('undefined'), 60);
+        } else if (action === 'unknown_orders') {
+          setTimeout(() => Orders.setStatusFilter?.('unknown'), 60);
         }
       });
     });

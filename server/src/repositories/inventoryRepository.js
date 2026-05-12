@@ -62,6 +62,7 @@ export function createInventoryRepository({ bq, projectId }) {
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
+          AND COALESCE(is_ignored, FALSE) = FALSE
         GROUP BY effective_sku
       )`;
 
@@ -153,6 +154,7 @@ export function createInventoryRepository({ bq, projectId }) {
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
+          AND COALESCE(is_ignored, FALSE) = FALSE
         GROUP BY effective_sku
       )
       SELECT
@@ -238,6 +240,7 @@ export function createInventoryRepository({ bq, projectId }) {
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
+          AND COALESCE(is_ignored, FALSE) = FALSE
         GROUP BY effective_sku
       )`;
 

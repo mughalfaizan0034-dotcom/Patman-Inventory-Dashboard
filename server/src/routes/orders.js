@@ -3,26 +3,28 @@ import { z } from 'zod';
 
 const positiveInt = z.coerce.number().int().positive();
 
+const STATUS_VALUES = z.enum(['all', 'normal', 'phantom', 'unknown', 'ignored']).optional().default('all');
+
 const ordersExportSchema = z.object({
-  platform:     z.string().optional(),
-  start_date:   z.string().optional(),
-  end_date:     z.string().optional(),
-  search:       z.string().optional(),
-  sort_by:      z.enum(['order_date','sku','quantity_sold','platform','shipped_from_box']).optional().default('order_date'),
-  sort_dir:     z.enum(['asc','desc']).optional().default('desc'),
-  phantom_only: z.coerce.boolean().optional().default(false),
+  platform:   z.string().optional(),
+  start_date: z.string().optional(),
+  end_date:   z.string().optional(),
+  search:     z.string().optional(),
+  sort_by:    z.enum(['order_date','sku','quantity_sold','platform','shipped_from_box']).optional().default('order_date'),
+  sort_dir:   z.enum(['asc','desc']).optional().default('desc'),
+  status:     STATUS_VALUES,
 });
 
 const ordersQuerySchema = z.object({
-  page:         positiveInt.optional().default(1),
-  pageSize:     positiveInt.max(10000).optional().default(50),
-  platform:     z.string().optional(),
-  start_date:   z.string().optional(),
-  end_date:     z.string().optional(),
-  search:       z.string().optional(),
-  sort_by:      z.enum(['order_date', 'sku', 'quantity_sold', 'platform', 'shipped_from_box']).optional().default('order_date'),
-  sort_dir:     z.enum(['asc', 'desc']).optional().default('desc'),
-  phantom_only: z.coerce.boolean().optional().default(false),
+  page:       positiveInt.optional().default(1),
+  pageSize:   positiveInt.max(10000).optional().default(50),
+  platform:   z.string().optional(),
+  start_date: z.string().optional(),
+  end_date:   z.string().optional(),
+  search:     z.string().optional(),
+  sort_by:    z.enum(['order_date', 'sku', 'quantity_sold', 'platform', 'shipped_from_box']).optional().default('order_date'),
+  sort_dir:   z.enum(['asc', 'desc']).optional().default('desc'),
+  status:     STATUS_VALUES,
 });
 
 const deleteFiltersSchema = z.object({
@@ -54,14 +56,14 @@ export async function ordersRoutes(fastify, { ordersService, activityService }) 
       return reply.code(400).send({ success: false, error: 'Invalid query parameters' });
     }
     try {
-      const { sort_by, sort_dir, phantom_only, start_date, end_date, ...rest } = parsed.data;
+      const { sort_by, sort_dir, status, start_date, end_date, ...rest } = parsed.data;
       const rows = await ordersService.exportAll(request.user.organization_id, {
         ...rest,
-        startDate:   start_date   || null,
-        endDate:     end_date     || null,
-        sortBy:      sort_by,
-        sortDir:     sort_dir,
-        phantomOnly: phantom_only,
+        startDate: start_date || null,
+        endDate:   end_date   || null,
+        sortBy:    sort_by,
+        sortDir:   sort_dir,
+        status:    status     || 'all',
       });
 
       const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -88,17 +90,17 @@ export async function ordersRoutes(fastify, { ordersService, activityService }) 
       return reply.code(400).send({ success: false, error: 'Invalid query parameters' });
     }
 
-    const { page, pageSize, platform, start_date, end_date, search, sort_by, sort_dir, phantom_only } = parsed.data;
+    const { page, pageSize, platform, start_date, end_date, search, sort_by, sort_dir, status } = parsed.data;
     try {
       const data = await ordersService.list(request.user.organization_id, {
         page, pageSize,
-        platform:    platform    || null,
-        startDate:   start_date  || null,
-        endDate:     end_date    || null,
-        search:      search      || null,
-        sortBy:      sort_by,
-        sortDir:     sort_dir,
-        phantomOnly: phantom_only || false,
+        platform:  platform   || null,
+        startDate: start_date || null,
+        endDate:   end_date   || null,
+        search:    search     || null,
+        sortBy:    sort_by,
+        sortDir:   sort_dir,
+        status:    status     || 'all',
       });
       return reply.send({ success: true, data });
     } catch (err) {
@@ -141,6 +143,57 @@ export async function ordersRoutes(fastify, { ordersService, activityService }) 
       return reply.send({ success: true });
     } catch (err) {
       request.log.error({ err }, 'Order update error');
+      return reply.code(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  fastify.patch('/:rowId/ignore', { preHandler: [authenticate] }, async (request, reply) => {
+    try {
+      await ordersService.ignoreOrder(
+        request.user.organization_id,
+        request.params.rowId,
+        request.user.user_id,
+      );
+      activityService?.log({
+        organizationId: request.user.organization_id,
+        userId:         request.user.user_id,
+        actionType:     'ignore_order',
+        entityType:     'orders',
+        description:    `Ignored order ${request.params.rowId}`,
+      }).catch(() => {});
+      return reply.send({ success: true });
+    } catch (err) {
+      request.log.error({ err }, 'Order ignore error');
+      return reply.code(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  const mapSkuBodySchema = z.object({
+    mapped_inventory_sku: z.string().min(1),
+  });
+
+  fastify.patch('/:rowId/map-sku', { preHandler: [authenticate] }, async (request, reply) => {
+    const parsed = mapSkuBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ success: false, error: 'mapped_inventory_sku is required' });
+    }
+    try {
+      await ordersService.mapSku(
+        request.user.organization_id,
+        request.params.rowId,
+        parsed.data.mapped_inventory_sku,
+        request.user.user_id,
+      );
+      activityService?.log({
+        organizationId: request.user.organization_id,
+        userId:         request.user.user_id,
+        actionType:     'map_order_sku',
+        entityType:     'orders',
+        description:    `Mapped order ${request.params.rowId} → inventory SKU ${parsed.data.mapped_inventory_sku}`,
+      }).catch(() => {});
+      return reply.send({ success: true });
+    } catch (err) {
+      request.log.error({ err }, 'Order map-sku error');
       return reply.code(500).send({ success: false, error: 'Internal server error' });
     }
   });

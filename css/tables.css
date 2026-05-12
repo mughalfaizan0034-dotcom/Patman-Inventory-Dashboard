@@ -67,6 +67,10 @@
 .data-table tbody tr.row-phantom         { background: rgba(220, 38, 38, 0.05); }
 .data-table tbody tr.row-phantom:hover   { background: rgba(220, 38, 38, 0.09); }
 
+/* Unknown SKU row — order SKU not found in inventory */
+.data-table tbody tr.row-unknown         { background: rgba(234, 179, 8, 0.07); }
+.data-table tbody tr.row-unknown:hover   { background: rgba(234, 179, 8, 0.13); }
+
 /* ── Compact card table (inside card with no extra border) ─── */
 .card-table .data-table thead th:first-child,
 .card-table .data-table tbody td:first-child { padding-left: 20px; }

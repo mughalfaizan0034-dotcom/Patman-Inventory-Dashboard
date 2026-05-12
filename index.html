@@ -387,9 +387,13 @@
               </select>
               <input class="form-input" id="filter-date-from" type="date" style="width:145px" title="From date">
               <input class="form-input" id="filter-date-to"   type="date" style="width:145px" title="To date">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--txt-2);cursor:pointer;white-space:nowrap">
-                <input type="checkbox" id="filter-phantom" style="cursor:pointer"> Phantom Only
-              </label>
+              <select class="form-select" id="filter-order-status" style="width:160px">
+                <option value="all">All Orders</option>
+                <option value="normal">Normal Orders</option>
+                <option value="phantom">Phantom Orders</option>
+                <option value="unknown">Unknown SKUs</option>
+                <option value="ignored">Ignored Orders</option>
+              </select>
               <button class="btn btn-ghost btn-sm" id="orders-reset-filters">Reset</button>
               <button class="btn btn-danger btn-sm" id="orders-delete-selected" disabled>Delete Selected</button>
               <button class="btn btn-secondary btn-sm" id="orders-export">📥 Export Orders</button>
@@ -673,17 +677,17 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- App modules — order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=3 — bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=12"></script>
-  <script src="js/notifications.js?v=12"></script>
-  <script src="js/loading.js?v=12"></script>
-  <script src="js/api.js?v=12"></script>
-  <script src="js/auth.js?v=12"></script>
-  <script src="js/dashboard.js?v=12"></script>
-  <script src="js/inventory.js?v=12"></script>
-  <script src="js/orders.js?v=12"></script>
-  <script src="js/uploads.js?v=12"></script>
-  <script src="js/app.js?v=12"></script>
+  <!-- v=13 — bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=13"></script>
+  <script src="js/notifications.js?v=13"></script>
+  <script src="js/loading.js?v=13"></script>
+  <script src="js/api.js?v=13"></script>
+  <script src="js/auth.js?v=13"></script>
+  <script src="js/dashboard.js?v=13"></script>
+  <script src="js/inventory.js?v=13"></script>
+  <script src="js/orders.js?v=13"></script>
+  <script src="js/uploads.js?v=13"></script>
+  <script src="js/app.js?v=13"></script>
 
 </body>
 </html>

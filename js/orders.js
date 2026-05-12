@@ -12,7 +12,7 @@ const Orders = (() => {
   let _sortBy      = 'order_date';
   let _sortDir     = 'desc';
 
-  const DATA_COLS = ['Order Date', 'SKU', 'Qty Sold', 'Shipped From Box', 'Platform'];
+  const DATA_COLS = ['Order Date', 'SKU', 'Qty Sold', 'Shipped From Box', 'Platform', ''];
   const ALL_COLS  = ['', ...DATA_COLS];
 
   /* ── SKU parser ──────────────────────────────────────────── */
@@ -71,6 +71,173 @@ const Orders = (() => {
     });
   }
 
+  /* ── Action menu (kebab) ─────────────────────────────────── */
+  let _activeMenu = null;
+
+  function _closeActionMenu() {
+    if (_activeMenu) { _activeMenu.remove(); _activeMenu = null; }
+  }
+
+  function _openActionMenu(btn, rowId, isUnknown, isIgnored) {
+    _closeActionMenu();
+
+    const items = [];
+    if (isUnknown && !isIgnored) {
+      items.push({ label: 'Assign Inventory SKU', action: 'assign' });
+    }
+    if (!isIgnored) {
+      items.push({ label: 'Ignore Order', action: 'ignore' });
+    }
+    if (!items.length) return;
+
+    const menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:10002;min-width:160px;padding:4px 0;font-size:13px;font-family:inherit';
+
+    const rect = btn.getBoundingClientRect();
+    menu.style.top  = (rect.bottom + 4) + 'px';
+    menu.style.left = Math.min(rect.right - 160, window.innerWidth - 172) + 'px';
+
+    items.forEach(item => {
+      const el = document.createElement('div');
+      el.style.cssText = 'padding:7px 14px;cursor:pointer;color:var(--txt-1);transition:background .1s';
+      el.textContent = item.label;
+      el.addEventListener('mouseenter', () => { el.style.background = '#f8fafc'; });
+      el.addEventListener('mouseleave', () => { el.style.background = ''; });
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        _closeActionMenu();
+        const tr = btn.closest('tr');
+        if (item.action === 'ignore')  _ignoreRow(rowId, tr);
+        if (item.action === 'assign')  _openAssignSkuModal(rowId, tr?.dataset.sku || '', tr);
+      });
+      menu.appendChild(el);
+    });
+
+    document.body.appendChild(menu);
+    _activeMenu = menu;
+
+    const onOutside = e => {
+      if (!menu.contains(e.target) && e.target !== btn) {
+        _closeActionMenu();
+        document.removeEventListener('mousedown', onOutside);
+      }
+    };
+    setTimeout(() => document.addEventListener('mousedown', onOutside), 0);
+  }
+
+  /* ── Ignore order ────────────────────────────────────────── */
+  async function _ignoreRow(rowId, tr) {
+    try {
+      await API.ignoreOrder(rowId);
+      Notify.success('Ignored', 'Order has been excluded from all calculations');
+      load();
+    } catch (err) {
+      Notify.apiError(err);
+    }
+  }
+
+  /* ── Assign inventory SKU modal ──────────────────────────── */
+  function _openAssignSkuModal(rowId, orderSku, tr) {
+    const m = new Modal({
+      title: 'Assign Inventory SKU',
+      body: `
+        <div style="display:grid;gap:12px">
+          <div style="font-size:13px;color:var(--txt-3)">
+            Order SKU: <strong style="color:var(--txt-1)">${Utils.escapeHtml(orderSku)}</strong>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--txt-3);font-weight:600;display:block;margin-bottom:4px">INVENTORY SKU TO MAP TO</label>
+            <div style="display:flex;gap:8px">
+              <input class="form-input" id="assign-sku-input" type="text" placeholder="Type inventory SKU…" style="flex:1">
+              <button class="btn btn-secondary btn-sm" id="assign-sku-search" style="white-space:nowrap">Search</button>
+            </div>
+          </div>
+          <div id="assign-sku-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;display:none"></div>
+          <div id="assign-sku-selected" style="display:none;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:13px;font-weight:600;color:#166534"></div>
+        </div>`,
+      footer: `
+        <button class="btn btn-ghost btn-sm" data-action="cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="assign-sku-confirm" disabled>Assign</button>`,
+      maxWidth: '420px',
+    });
+    m.show();
+
+    let _chosenSku = null;
+
+    const inputEl    = document.getElementById('assign-sku-input');
+    const searchBtn  = document.getElementById('assign-sku-search');
+    const resultsEl  = document.getElementById('assign-sku-results');
+    const selectedEl = document.getElementById('assign-sku-selected');
+    const confirmBtn = document.getElementById('assign-sku-confirm');
+
+    function _showResults(items) {
+      if (!items?.length) {
+        resultsEl.style.display = 'block';
+        resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--txt-3);font-size:13px">No matching inventory SKUs found</div>';
+        return;
+      }
+      resultsEl.style.display = 'block';
+      resultsEl.innerHTML = items.map(item => `
+        <div class="assign-sku-row" data-sku="${Utils.escapeHtml(item.sku)}"
+             style="padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;transition:background .1s">
+          <div style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku)}</div>
+          <div style="font-size:11px;color:var(--txt-3)">Box ${Utils.escapeHtml(item.box_number || '—')} · Stock: ${Utils.formatNumber(item.quantity)}</div>
+        </div>`).join('');
+
+      resultsEl.querySelectorAll('.assign-sku-row').forEach(row => {
+        row.addEventListener('mouseenter', () => { row.style.background = 'var(--surface-2)'; });
+        row.addEventListener('mouseleave', () => { row.style.background = ''; });
+        row.addEventListener('click', () => {
+          _chosenSku = row.dataset.sku;
+          selectedEl.textContent = `Selected: ${_chosenSku}`;
+          selectedEl.style.display = 'block';
+          confirmBtn.disabled = false;
+          resultsEl.style.display = 'none';
+        });
+      });
+    }
+
+    async function _doSearch() {
+      const term = inputEl.value.trim();
+      if (!term) return;
+      searchBtn.disabled = true;
+      searchBtn.textContent = '…';
+      try {
+        const data = await API.getInventoryList(1, 20, term, {});
+        _showResults(data?.items || []);
+      } catch {
+        resultsEl.style.display = 'block';
+        resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--error);font-size:13px">Search failed — try again</div>';
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = 'Search';
+      }
+    }
+
+    searchBtn.addEventListener('click', _doSearch);
+    inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _doSearch(); } });
+
+    confirmBtn.addEventListener('click', async () => {
+      if (!_chosenSku) return;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Assigning…';
+      try {
+        await API.mapOrderSku(rowId, _chosenSku);
+        m.hide(); m.destroy();
+        Notify.success('Mapped', `Order SKU mapped to inventory SKU: ${_chosenSku}`);
+        load();
+      } catch (err) {
+        Notify.apiError(err);
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Assign';
+      }
+    });
+
+    m.footerEl.addEventListener('click', e => {
+      if (e.target.closest('[data-action="cancel"]')) { m.hide(); m.destroy(); }
+    });
+  }
+
   /* ── Render table ────────────────────────────────────────── */
   function _renderTable(rows, total) {
     _total = total || 0;
@@ -87,12 +254,20 @@ const Orders = (() => {
       return;
     }
 
-    const isPhantom = _filters.phantom_only;
+    const statusFilter = _filters.status || 'all';
 
     tbody.innerHTML = rows.map(row => {
-      const id         = row.order_row_id || '';
-      const checked    = _selectedIds.has(id) ? ' checked' : '';
-      const trStyle    = isPhantom ? ' class="row-phantom"' : '';
+      const id        = row.order_row_id || '';
+      const checked   = _selectedIds.has(id) ? ' checked' : '';
+      const isUnknown = !!row.is_unknown;
+      const isIgnored = !!row.is_ignored;
+
+      let rowClass = '';
+      if (statusFilter === 'phantom') rowClass = 'row-phantom';
+      else if (isUnknown && !isIgnored) rowClass = 'row-unknown';
+
+      const trAttr = rowClass ? ` class="${rowClass}"` : '';
+
       const parsedSku  = _parseSku(row.sku || '');
       const origBox    = parsedSku?.box || '';
       const shipped    = row.shipped_from_box || '';
@@ -100,22 +275,36 @@ const Orders = (() => {
       const shippedHtml = isOverride
         ? `<span style="font-weight:500">${Utils.escapeHtml(shipped)}</span><span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Override</span><button class="order-edit-btn" style="background:none;border:none;opacity:.45;font-size:11px;padding:0 3px;margin-left:4px;cursor:pointer;vertical-align:middle" title="Change fulfillment box">✏️</button>`
         : `<span class="order-edit-btn" style="display:inline-flex;align-items:center;gap:3px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer" title="Click to change fulfillment box">★ ${Utils.escapeHtml(origBox || '—')}</span>`;
+
+      const unknownBadge = isUnknown && !isIgnored
+        ? `<span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Unknown SKU</span>`
+        : '';
+      const ignoredBadge = isIgnored
+        ? `<span style="font-size:10px;background:#f1f5f9;color:#94a3b8;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:5px;vertical-align:middle">Ignored</span>`
+        : '';
+
+      const showAction = !isIgnored;
+      const actionBtn = showAction
+        ? `<button class="order-action-btn" data-row-id="${Utils.escapeHtml(id)}" data-unknown="${isUnknown}" data-ignored="${isIgnored}" style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:16px;color:var(--txt-4);border-radius:4px;line-height:1" title="Actions">⋮</button>`
+        : '';
+
       return `<tr data-row-id="${Utils.escapeHtml(id)}"
                   data-order-date="${Utils.escapeHtml(row.order_date || '')}"
                   data-sku="${Utils.escapeHtml(row.sku || '')}"
                   data-qty="${Utils.escapeHtml(String(row.quantity_sold ?? ''))}"
                   data-shipped="${Utils.escapeHtml(shipped)}"
-                  data-platform="${Utils.escapeHtml(row.platform || '')}"${trStyle}>
+                  data-platform="${Utils.escapeHtml(row.platform || '')}"${trAttr}>
         <td style="width:36px;text-align:center;padding:0 4px">
           <input type="checkbox" class="order-row-cb" data-id="${Utils.escapeHtml(id)}"${checked} style="cursor:pointer">
         </td>
         <td>${Utils.escapeHtml(row.order_date || '-')}</td>
-        <td style="font-weight:500">${Utils.escapeHtml(row.sku || '-')}</td>
+        <td style="font-weight:500">${Utils.escapeHtml(row.sku || '-')}${unknownBadge}${ignoredBadge}</td>
         <td class="num"><strong>${Utils.formatNumber(row.quantity_sold)}</strong></td>
         <td class="shipped-cell" style="white-space:nowrap">
           ${shippedHtml}
         </td>
         <td>${_platformBadge(row.platform)}</td>
+        <td style="width:36px;text-align:center;padding:0 2px">${actionBtn}</td>
       </tr>`;
     }).join('');
 
@@ -132,6 +321,18 @@ const Orders = (() => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         _openInlineBoxSelector(btn.closest('tr'));
+      });
+    });
+
+    tbody.querySelectorAll('.order-action-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        _openActionMenu(
+          btn,
+          btn.dataset.rowId,
+          btn.dataset.unknown === 'true',
+          btn.dataset.ignored === 'true',
+        );
       });
     });
 
@@ -261,7 +462,6 @@ const Orders = (() => {
     function _render() {
       pop.innerHTML = '';
 
-      // Original section
       const origSect = document.createElement('div');
       origSect.style.cssText = 'padding:10px 12px 8px;border-bottom:1px solid #f1f5f9';
       const origLbl = document.createElement('div');
@@ -271,7 +471,6 @@ const Orders = (() => {
       if (orig) origSect.appendChild(_makeOptEl(orig));
       pop.appendChild(origSect);
 
-      // Alternatives section
       const altSect = document.createElement('div');
       altSect.style.cssText = 'padding:10px 12px 8px;overflow-y:auto;max-height:210px';
       const altLbl = document.createElement('div');
@@ -288,7 +487,6 @@ const Orders = (() => {
       }
       pop.appendChild(altSect);
 
-      // Footer
       const footer = document.createElement('div');
       footer.style.cssText = 'padding:10px 12px;border-top:1px solid #f1f5f9;display:flex;gap:8px;justify-content:flex-end;background:#f8fafc';
       const cancelBtn = document.createElement('button');
@@ -324,13 +522,11 @@ const Orders = (() => {
     const cell       = tr.querySelector('td.shipped-cell');
     if (!cell) return;
 
-    // Toggle: clicking chip/button while popover is open for same row closes it
     if (_activePopover?.dataset?.rowId === rowId) { _closeBoxPopover(); return; }
     _closeBoxPopover();
 
     if (!parsed) { Notify.warning('Cannot edit', 'SKU format not recognized'); return; }
 
-    // Dim cell while loading
     const trigger = cell.firstElementChild;
     if (trigger) { trigger.style.opacity = '0.5'; trigger.style.pointerEvents = 'none'; }
 
@@ -425,13 +621,14 @@ const Orders = (() => {
     const platform  = document.getElementById('filter-platform')?.value;
     const dateFrom  = document.getElementById('filter-date-from')?.value;
     const dateTo    = document.getElementById('filter-date-to')?.value;
-    const phantomCb = document.getElementById('filter-phantom');
+    const statusSel = document.getElementById('filter-order-status');
 
-    if (search)   _filters.search      = search;
-    if (platform) _filters.platform    = platform;
-    if (dateFrom) _filters.start_date  = dateFrom;
-    if (dateTo)   _filters.end_date    = dateTo;
-    if (phantomCb?.checked) _filters.phantom_only = true;
+    if (search)   _filters.search     = search;
+    if (platform) _filters.platform   = platform;
+    if (dateFrom) _filters.start_date = dateFrom;
+    if (dateTo)   _filters.end_date   = dateTo;
+    const status = statusSel?.value || 'all';
+    if (status !== 'all') _filters.status = status;
   }
 
   function _resetFilters() {
@@ -439,19 +636,20 @@ const Orders = (() => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
-    const phantomCb = document.getElementById('filter-phantom');
-    if (phantomCb) phantomCb.checked = false;
+    const statusSel = document.getElementById('filter-order-status');
+    if (statusSel) statusSel.value = 'all';
     _filters = {};
     _page = 1;
     load();
   }
 
   /* ── Set filter programmatically (from dashboard KPI clicks) */
-  function setPhantomFilter() {
-    _filters = { phantom_only: true };
+  function setStatusFilter(status) {
+    _filters = {};
+    if (status && status !== 'all') _filters.status = status;
     _page = 1;
-    const phantomCb = document.getElementById('filter-phantom');
-    if (phantomCb) phantomCb.checked = true;
+    const statusSel = document.getElementById('filter-order-status');
+    if (statusSel) statusSel.value = status || 'all';
     load();
   }
 
@@ -577,7 +775,7 @@ const Orders = (() => {
     const searchEl     = document.getElementById('orders-search');
     const selectAll    = document.getElementById('orders-select-all');
     const deleteSelBtn = document.getElementById('orders-delete-selected');
-    const phantomCb    = document.getElementById('filter-phantom');
+    const statusSel    = document.getElementById('filter-order-status');
     const platSel      = document.getElementById('filter-platform');
     const dateFrom     = document.getElementById('filter-date-from');
     const dateTo       = document.getElementById('filter-date-to');
@@ -585,7 +783,7 @@ const Orders = (() => {
     if (resetBtn)     resetBtn.addEventListener('click',     _resetFilters);
     if (exportBtn)    exportBtn.addEventListener('click',    _openExportModal);
     if (deleteSelBtn) deleteSelBtn.addEventListener('click', _deleteSelected);
-    if (phantomCb)    phantomCb.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
+    if (statusSel)    statusSel.addEventListener('change',   () => { _collectFilters(); _page = 1; load(); });
     if (platSel)      platSel.addEventListener('change',     () => { _collectFilters(); _page = 1; load(); });
     if (dateFrom)     dateFrom.addEventListener('change',    () => { _collectFilters(); _page = 1; load(); });
     if (dateTo)       dateTo.addEventListener('change',      () => { _collectFilters(); _page = 1; load(); });
@@ -616,5 +814,5 @@ const Orders = (() => {
     _updateDeleteBtn();
   }
 
-  return { init, load, clearSelection, setPhantomFilter };
+  return { init, load, clearSelection, setStatusFilter };
 })();

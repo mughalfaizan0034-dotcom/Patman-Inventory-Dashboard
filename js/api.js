@@ -293,6 +293,8 @@ const API = (() => {
     async getPlatforms()                                            { return _crGet('/orders/platforms'); },
     async deleteOrders(payload)                                     { return _crDelete('/orders/rows', payload); },
     async updateOrder(rowId, updates)                               { return _crPatch(`/orders/${encodeURIComponent(rowId)}`, updates); },
+    async ignoreOrder(rowId)                                        { return _crPatch(`/orders/${encodeURIComponent(rowId)}/ignore`, {}); },
+    async mapOrderSku(rowId, mappedInventorySku)                    { return _crPatch(`/orders/${encodeURIComponent(rowId)}/map-sku`, { mapped_inventory_sku: mappedInventorySku }); },
 
     /* Inventory */
     async getInventoryAlternatives(sku)                                        { return _crGet('/inventory/alternatives', { sku }); },

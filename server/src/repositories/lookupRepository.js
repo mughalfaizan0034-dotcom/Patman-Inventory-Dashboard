@@ -55,6 +55,7 @@ export function createLookupRepository({ bq, projectId }) {
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
+          AND COALESCE(is_ignored, FALSE) = FALSE
         GROUP BY effective_sku
       ),
       box_orders AS (

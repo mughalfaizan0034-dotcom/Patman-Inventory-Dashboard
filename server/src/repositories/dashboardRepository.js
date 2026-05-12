@@ -6,8 +6,7 @@ export function createDashboardRepository({ bq, projectId }) {
   const invUplTable = `\`${projectId}.${TABLES.INVENTORY_UPLOADS}\``;
   const ordUplTable = `\`${projectId}.${TABLES.ORDER_UPLOADS}\``;
 
-  // Reusable CTE: resolves effective_sku by applying shipped_from_box override
-  // for ARA-pattern SKUs, then aggregates quantity_sold per effective_sku.
+  // Reusable CTE: resolves effective_sku with ARA override; excludes ignored orders.
   const _ordersAggCTE = () => `
     orders_agg AS (
       SELECT
@@ -22,6 +21,7 @@ export function createDashboardRepository({ bq, projectId }) {
         SUM(quantity_sold) AS sold
       FROM ${ordTable}
       WHERE organization_id = @organizationId
+        AND COALESCE(is_ignored, FALSE) = FALSE
       GROUP BY effective_sku
     )`;
 
@@ -39,6 +39,7 @@ export function createDashboardRepository({ bq, projectId }) {
         COUNT(DISTINCT CASE WHEN platform IS NOT NULL THEN platform END) AS active_platforms
       FROM ${ordTable}
       WHERE organization_id = @organizationId
+        AND COALESCE(is_ignored, FALSE) = FALSE
     `;
 
     const metricsQuery = `
@@ -58,7 +59,9 @@ export function createDashboardRepository({ bq, projectId }) {
             ELSE sku
           END AS effective_sku,
           SUM(quantity_sold) AS sold
-        FROM ${ordTable} WHERE organization_id = @organizationId
+        FROM ${ordTable}
+        WHERE organization_id = @organizationId
+          AND COALESCE(is_ignored, FALSE) = FALSE
         GROUP BY effective_sku
       ),
       remaining AS (
@@ -72,6 +75,8 @@ export function createDashboardRepository({ bq, projectId }) {
           FROM ${ordTable} o2
           WHERE o2.organization_id = @organizationId
             AND o2.sku NOT IN (SELECT sku FROM inv)
+            AND COALESCE(o2.is_ignored, FALSE) = FALSE
+            AND o2.mapped_inventory_sku IS NULL
         ) AS undefined_sku_orders
       FROM remaining
     `;
