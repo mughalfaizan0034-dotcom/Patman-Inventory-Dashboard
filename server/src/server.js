@@ -24,6 +24,7 @@ import { createAuthService } from './services/authService.js';
 import { createInventoryService } from './services/inventoryService.js';
 import { createOrdersService } from './services/ordersService.js';
 import { createDashboardService } from './services/dashboardService.js';
+import { createInventoryMetricsService } from './services/inventoryMetricsService.js';
 import { createUploadsService } from './services/uploadsService.js';
 import { createUsersService } from './services/usersService.js';
 import { createUsernameService } from './services/usernameService.js';
@@ -141,7 +142,8 @@ export async function buildApp() {
     const authService      = createAuthService({ usersRepo, membershipsRepo });
     const inventoryService = createInventoryService({ inventoryRepo });
     const ordersService    = createOrdersService({ ordersRepo });
-    const dashboardService = createDashboardService({ dashboardRepo });
+    const metricsService   = createInventoryMetricsService(deps);
+    const dashboardService = createDashboardService({ dashboardRepo, metricsService });
     const uploadsService   = createUploadsService({ uploadsRepo });
     const usersService     = createUsersService({ usersRepo, membershipsRepo, usernameService });
     const activityService  = createActivityService({ activityRepo });

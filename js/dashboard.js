@@ -6,17 +6,18 @@
 const Dashboard = (() => {
 
   const INVENTORY_KPIS = [
-    { id: 'kpi-total-skus',      label: 'Total SKUs',      icon: '📦', color: 'blue',   field: 'totalSkus',      format: 'number', navigate: 'inventory' },
-    { id: 'kpi-total-units',     label: 'Total Units',     icon: '🔢', color: 'purple', field: 'totalUnits',     format: 'number', navigate: 'inventory' },
-    { id: 'kpi-remaining-stock', label: 'Remaining Stock', icon: '🏭', color: 'green',  field: 'remainingStock', format: 'number', navigate: 'inventory' },
-    { id: 'kpi-phantom-units',   label: 'Phantom Units',   icon: '👻', color: 'red',    field: 'phantomUnits',   format: 'number', navigate: 'inventory', action: 'phantom' },
-    { id: 'kpi-undefined-skus',  label: 'Undefined SKUs',  icon: '⚠',  color: 'gray',   field: 'undefinedSkus',  format: 'number', navigate: 'inventory', action: 'undefined' },
+    { id: 'kpi-total-skus',      label: 'Total SKUs',      icon: '📦', color: 'blue',   field: 'totalSkus',              format: 'number', navigate: 'inventory' },
+    { id: 'kpi-total-units',     label: 'Total Units',     icon: '🔢', color: 'purple', field: 'totalUnits',             format: 'number', navigate: 'inventory' },
+    { id: 'kpi-remaining-stock', label: 'Remaining Stock', icon: '🏭', color: 'green',  field: 'physicalRemainingUnits', format: 'number', navigate: 'inventory' },
+    { id: 'kpi-phantom-units',   label: 'Phantom Units',   icon: '👻', color: 'red',    field: 'phantomUnits',           format: 'number', navigate: 'inventory', action: 'phantom' },
+    { id: 'kpi-undefined-skus',  label: 'Undefined SKUs',  icon: '⚠',  color: 'gray',   field: 'undefinedSkus',          format: 'number', navigate: 'inventory', action: 'undefined' },
   ];
 
   const SALES_KPIS = [
-    { id: 'kpi-units-sold',       label: 'Units Sold',           icon: '🛒', color: 'orange', field: 'unitsSold',          format: 'number', navigate: 'orders' },
-    { id: 'kpi-total-orders',     label: 'Total Orders',         icon: '📋', color: 'cyan',   field: 'totalOrders',        format: 'number', navigate: 'orders' },
-    { id: 'kpi-undefined-orders', label: 'Undefined SKU Orders', icon: '❓', color: 'pink',   field: 'undefinedSkuOrders', format: 'number', navigate: 'orders', action: 'unknown_orders' },
+    { id: 'kpi-units-sold',        label: 'Units Sold',           icon: '🛒', color: 'orange', field: 'unitsSold',          format: 'number', navigate: 'orders' },
+    { id: 'kpi-actual-units-sold', label: 'Actual Units Sold',    icon: '✅', color: 'teal',   field: 'actualUnitsSold',    format: 'number' },
+    { id: 'kpi-total-orders',      label: 'Total Orders',         icon: '📋', color: 'cyan',   field: 'totalOrders',        format: 'number', navigate: 'orders' },
+    { id: 'kpi-undefined-orders',  label: 'Undefined SKU Orders', icon: '❓', color: 'pink',   field: 'undefinedSkuOrders', format: 'number', navigate: 'orders', action: 'unknown_orders' },
   ];
 
   function _renderSkeletons() {
@@ -27,10 +28,11 @@ const Dashboard = (() => {
   }
 
   function _buildSub(def, data) {
-    if (def.field === 'phantomUnits'      && data.phantomUnits      > 0) return 'Units sold exceeding initial stock';
-    if (def.field === 'undefinedSkuOrders'&& data.undefinedSkuOrders> 0) return 'Orders with no inventory record';
-    if (def.field === 'remainingStock'    && data.remainingStock     < 0) return 'Negative — oversold';
-    if (def.field === 'undefinedSkus'     && data.undefinedSkus      > 0) return 'Inventory rows with NA/blank values';
+    if (def.field === 'phantomUnits'         && data.phantomUnits         > 0) return 'Unfulfillable demand — exceeds stock';
+    if (def.field === 'undefinedSkuOrders'   && data.undefinedSkuOrders   > 0) return 'Orders with no inventory record';
+    if (def.field === 'undefinedSkus'        && data.undefinedSkus        > 0) return 'Inventory rows with NA/blank values';
+    if (def.field === 'actualUnitsSold')                                        return 'Fulfilled inventory-backed sales only';
+    if (def.field === 'physicalRemainingUnits' && data.physicalRemainingUnits === 0) return 'All stock fulfilled or phantom';
     return '';
   }
 
@@ -95,7 +97,7 @@ const Dashboard = (() => {
     _renderSkeletons();
     try {
       const [kpiData, activityData] = await Promise.all([
-        API.getDashboardKPIs(),
+        MetricsEngine.load(),
         API.getActivity().catch(() => []),
       ]);
       _renderKPIs(kpiData);

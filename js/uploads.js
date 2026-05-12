@@ -154,6 +154,7 @@ const Uploads = (() => {
           ${errors.length > 0 ? _renderErrors(errors) : ''}`;
       }
 
+      MetricsEngine.invalidate();
       Notify.success('Upload complete', `${total} row${total !== 1 ? 's' : ''} processed (${added} added, ${updated} updated, ${removed} removed).`);
       loadHistory();
     } catch (err) {

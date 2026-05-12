@@ -71,8 +71,8 @@ export function createLookupRepository({ bq, projectId }) {
         ig.part_number,
         ig.box_number,
         ig.initial_stock,
-        COALESCE(bo.units_sold, 0)                    AS units_sold,
-        ig.initial_stock - COALESCE(bo.units_sold, 0) AS remaining_stock
+        COALESCE(bo.units_sold, 0)                                    AS units_sold,
+        GREATEST(ig.initial_stock - COALESCE(bo.units_sold, 0), 0)   AS remaining_stock
       FROM inv_grouped ig
       LEFT JOIN box_orders bo
         ON  ig.box_number   = bo.box_number

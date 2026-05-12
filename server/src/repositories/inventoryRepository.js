@@ -71,7 +71,7 @@ export function createInventoryRepository({ bq, projectId }) {
       SELECT
         i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
         COALESCE(o.units_sold, 0) AS units_sold,
-        i.quantity - COALESCE(o.units_sold, 0) AS remaining_stock
+        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
       FROM ${invTable} i
       LEFT JOIN ord_summary o ON i.sku = o.effective_sku
       ${where} ${stockCond}
@@ -159,7 +159,7 @@ export function createInventoryRepository({ bq, projectId }) {
       )
       SELECT
         i.box_number,
-        i.quantity - COALESCE(o.units_sold, 0) AS remaining_stock
+        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
       FROM ${invTable} i
       LEFT JOIN ord_summary o ON i.sku = o.effective_sku
       WHERE i.organization_id = @organizationId
@@ -249,7 +249,7 @@ export function createInventoryRepository({ bq, projectId }) {
       SELECT
         i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
         COALESCE(o.units_sold, 0) AS units_sold,
-        i.quantity - COALESCE(o.units_sold, 0) AS remaining_stock
+        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
       FROM ${invTable} i
       LEFT JOIN ord_summary o ON i.sku = o.effective_sku
       ${where} ${stockCond}

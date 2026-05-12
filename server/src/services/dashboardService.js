@@ -1,7 +1,6 @@
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function monthLabel(ym) {
-  // ym = '2026-05'
   const [y, m] = ym.split('-');
   return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`;
 }
@@ -12,9 +11,9 @@ function weekLabel(dateVal) {
   return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
-export function createDashboardService({ dashboardRepo }) {
+export function createDashboardService({ dashboardRepo, metricsService }) {
   async function getKPIs(organizationId) {
-    return dashboardRepo.getKPIs(organizationId);
+    return metricsService.computeSummary(organizationId);
   }
 
   async function getPerformance(organizationId, weeks, platform = null) {
@@ -47,7 +46,7 @@ export function createDashboardService({ dashboardRepo }) {
   }
 
   async function getInventoryAnalytics(organizationId) {
-    const raw = await dashboardRepo.getInventoryAnalytics(organizationId);
+    const raw = await metricsService.getStockAnalytics(organizationId);
 
     return {
       stockStatus: raw.stockStatus.map(r => ({
@@ -68,9 +67,9 @@ export function createDashboardService({ dashboardRepo }) {
       })),
       mostOversoldSkus: raw.mostOversoldSkus.map(r => ({
         sku:          r.sku,
-        original_qty: Number(r.original_qty ?? 0),
-        units_sold:   Number(r.units_sold   ?? 0),
-        remaining:    Number(r.remaining    ?? 0),
+        original_qty: Number(r.original_qty  ?? 0),
+        units_sold:   Number(r.units_sold    ?? 0),
+        remaining:    Number(r.phantom_demand ?? 0),
       })),
       boxUtilization: raw.boxUtilization.map(r => ({
         box_number:  r.box_number,
