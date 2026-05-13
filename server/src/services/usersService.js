@@ -33,9 +33,11 @@ export function createUsersService({ usersRepo, membershipsRepo, usernameService
   //   role              — required, one of VALID_ROLES (applied to every assigned org membership)
   //   organization_ids  — required, non-empty array of org UUIDs to assign membership in
   //
-  // The creating admin's current org is automatically included if not in the
-  // list — the new user must be visible to the admin who created them.
-  async function create(creatingOrgId, { display_name, username, password, role, organization_ids }) {
+  // Settings is treated as outside any org context — the admin's "current
+  // workspace" is irrelevant here. They explicitly choose the orgs for the
+  // new user. No automatic injection.
+  // eslint-disable-next-line no-unused-vars
+  async function create(_creatingOrgId, { display_name, username, password, role, organization_ids }) {
     if (!display_name?.trim()) throw new AppError(400, 'display_name is required');
     if (!username?.trim())     throw new AppError(400, 'username is required');
     if (!password || password.length < 8) throw new AppError(400, 'Password must be at least 8 characters');
@@ -44,7 +46,6 @@ export function createUsersService({ usersRepo, membershipsRepo, usernameService
     }
 
     const orgIds = Array.isArray(organization_ids) ? [...new Set(organization_ids.filter(Boolean))] : [];
-    if (creatingOrgId && !orgIds.includes(creatingOrgId)) orgIds.push(creatingOrgId);
     if (!orgIds.length) throw new AppError(400, 'organization_ids must include at least one organization');
 
     const normalized = usernameService.normalize(username);
