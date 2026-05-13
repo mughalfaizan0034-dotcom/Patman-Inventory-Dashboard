@@ -75,9 +75,10 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
       });
 
       const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const header = 'UID,Order Date,SKU,Qty Sold,Shipped SKU,Platform';
+      const header = 'UID,Order ID,Order Date,SKU,Qty Sold,Shipped SKU,Platform';
       const lines  = rows.map(r => [
         r.order_row_id,
+        r.order_id,
         r.order_date,
         r.sku,
         r.quantity_sold,
@@ -118,7 +119,7 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
       return reply.send({ success: true, data });
     } catch (err) {
       request.log.error({ err }, 'Orders list error');
-      return reply.code(500).send({ success: false, error: 'Internal server error' });
+      return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
     }
   });
 
@@ -128,7 +129,7 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
       return reply.send({ success: true, data });
     } catch (err) {
       request.log.error({ err }, 'Platforms error');
-      return reply.code(500).send({ success: false, error: 'Internal server error' });
+      return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
     }
   });
 

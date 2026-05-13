@@ -54,24 +54,10 @@
 .form-input.has-error,
 .form-select.has-error { border-color: var(--error); }
 
-/* ── Active filter highlight ────────────────────────────────── */
-.form-select.filter-active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-  font-weight: 600;
-}
-.form-select.filter-active option {
-  background: var(--surface);
-  color: var(--txt-1);
-  font-weight: 400;
-}
-.form-input[type="date"].filter-active {
-  background: var(--primary-50);
-  border-color: var(--primary);
-  color: var(--primary);
-  font-weight: 600;
-}
+/* Filter-active highlight intentionally REMOVED.
+   Filter selects and date inputs now keep their default neutral
+   appearance regardless of whether the user has chosen a non-default
+   value. Was visually distracting; users can read the value itself. */
 
 .form-textarea { resize: vertical; min-height: 80px; }
 

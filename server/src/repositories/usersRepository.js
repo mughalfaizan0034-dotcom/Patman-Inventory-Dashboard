@@ -8,7 +8,7 @@ export function createUsersRepository({ bq, projectId }) {
   // Global lookup — usernames are unique across the platform.
   async function findByUsernameGlobal(username) {
     const query = `
-      SELECT user_id, username, password_hash, display_name, is_active
+      SELECT user_id, username, password_hash, display_name, role, is_active
       FROM ${table}
       WHERE username  = @username
         AND is_active = TRUE
@@ -20,7 +20,7 @@ export function createUsersRepository({ bq, projectId }) {
 
   async function findById(userId) {
     const query = `
-      SELECT user_id, username, password_hash, display_name, is_active
+      SELECT user_id, username, password_hash, display_name, role, is_active
       FROM ${table}
       WHERE user_id = @userId
       LIMIT 1
@@ -31,7 +31,7 @@ export function createUsersRepository({ bq, projectId }) {
 
   async function findAll() {
     const query = `
-      SELECT user_id, username, display_name, is_active, created_at
+      SELECT user_id, username, display_name, role, is_active, created_at
       FROM ${table}
       ORDER BY display_name
     `;
@@ -67,7 +67,7 @@ export function createUsersRepository({ bq, projectId }) {
         GROUP BY m.user_id
       )
       SELECT
-        u.user_id, u.username, u.display_name, u.is_active, u.created_at,
+        u.user_id, u.username, u.display_name, u.role, u.is_active, u.created_at,
         um.memberships
       FROM ${table} u
       LEFT JOIN user_memberships um USING (user_id)

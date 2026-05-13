@@ -29,6 +29,7 @@ export function createAuthService({ usersRepo, membershipsRepo }) {
       user_id:      user.user_id,
       username:     user.username,
       display_name: user.display_name,
+      role:         user.role,           // global role from users.role (post Phase C)
       memberships,
     };
   }

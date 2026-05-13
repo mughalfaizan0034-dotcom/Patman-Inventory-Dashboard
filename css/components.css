@@ -527,20 +527,10 @@
   color: var(--txt-2);
 }
 
-/* Organizations column — native <details> dropdown listing org names.
-   Browser handles open/close, no JS state to maintain. */
-.user-orgs-details {
-  display: inline-block;
-  position: relative;
-}
-.user-orgs-details > summary {
-  list-style: none;
-  cursor: pointer;
-  user-select: none;
-}
-.user-orgs-details > summary::-webkit-details-marker { display: none; }
-
-.user-orgs-summary {
+/* Organizations column — button + JS-positioned popover.
+   The popover is appended to <body> with position:fixed so it never gets
+   clipped by the .table-wrap overflow that the row lives inside. */
+.user-orgs-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -548,16 +538,18 @@
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
+  font-family: var(--font-body);
   font-size: 12px;
   font-weight: 600;
   color: var(--txt-2);
+  cursor: pointer;
   transition: border-color var(--dur), background var(--dur);
 }
-.user-orgs-details:hover .user-orgs-summary {
+.user-orgs-trigger:hover {
   border-color: var(--border-2);
   background: var(--surface-3);
 }
-.user-orgs-details[open] .user-orgs-summary {
+.user-orgs-trigger.is-open {
   border-color: var(--primary);
   background: var(--surface-3);
 }
@@ -568,34 +560,39 @@
   color: var(--txt-4);
   transition: transform var(--dur) var(--ease);
 }
-.user-orgs-details[open] .user-orgs-chevron {
+.user-orgs-trigger.is-open .user-orgs-chevron {
   transform: rotate(180deg);
   color: var(--primary);
 }
 
-.user-orgs-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+.user-orgs-popover {
+  position: fixed;
   min-width: 200px;
-  margin: 0;
+  max-width: 320px;
+  max-height: 280px;
+  overflow-y: auto;
   padding: 6px;
-  list-style: none;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  box-shadow: var(--shadow-md);
-  z-index: 50;
+  box-shadow: var(--shadow-lg);
+  z-index: 5000;
+  animation: fadeIn .12s var(--ease);
 }
-.user-orgs-list li {
-  padding: 6px 8px;
+.user-orgs-popover ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.user-orgs-popover li {
+  padding: 7px 10px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--txt-1);
   border-radius: var(--r-xs);
   white-space: nowrap;
 }
-.user-orgs-list li:hover {
+.user-orgs-popover li:hover {
   background: var(--surface-3);
 }
 

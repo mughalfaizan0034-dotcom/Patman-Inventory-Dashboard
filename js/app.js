@@ -49,20 +49,16 @@ const Settings = (() => {
         const roleLabel = ROLE_LABEL[role] || Utils.capitalize(role);
 
         const memberships = Array.isArray(u.memberships) ? u.memberships : [];
-        // Native <details> dropdown — browser handles open/close, no JS.
-        // Summary shows count; expanded list shows each org name (no role
-        // badge, because role is global on the user).
+        // Button + JS-positioned popover. The popover uses position:fixed so
+        // it escapes the .table-wrap overflow:auto that would otherwise clip
+        // a position:absolute dropdown. Click anywhere outside to close.
+        const orgNamesAttr = Utils.escapeHtml(JSON.stringify(memberships.map(m => m.org_name || m.organization_id)));
         const orgsHtml = memberships.length === 0
           ? `<span style="font-size:12px;color:var(--txt-4);font-style:italic">No memberships</span>`
-          : `<details class="user-orgs-details">
-               <summary class="user-orgs-summary">
-                 <span class="user-orgs-count">${memberships.length} ${memberships.length === 1 ? 'organization' : 'organizations'}</span>
-                 <i data-lucide="chevron-down" class="icon user-orgs-chevron" aria-hidden="true"></i>
-               </summary>
-               <ul class="user-orgs-list">
-                 ${memberships.map(m => `<li>${Utils.escapeHtml(m.org_name || m.organization_id)}</li>`).join('')}
-               </ul>
-             </details>`;
+          : `<button type="button" class="user-orgs-trigger" data-orgs-popover='${orgNamesAttr}'>
+               <span>${memberships.length} ${memberships.length === 1 ? 'organization' : 'organizations'}</span>
+               <i data-lucide="chevron-down" class="icon user-orgs-chevron" aria-hidden="true"></i>
+             </button>`;
 
         const inactiveTag = isActive ? '' : '<span class="user-inactive-tag" title="Account is deactivated">DEACTIVATED</span>';
 
@@ -85,6 +81,7 @@ const Settings = (() => {
           </td>
         </tr>`;
       }).join('');
+      _wireOrgsPopover();
       Icons?.refresh?.();
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="5">${Loading.error('Failed to load users')}</td></tr>`;
@@ -133,7 +130,7 @@ const Settings = (() => {
 
         <div class="form-group">
           <label class="form-label">Organizations <span class="req">*</span></label>
-          <div class="multiselect" data-field="orgs">
+          <div class="multiselect" data-field="orgs" data-ms-noun="organizations" data-ms-placeholder="Select organizations…">
             <button type="button" class="multiselect-trigger" data-ms-trigger>
               <span class="multiselect-label" data-ms-label>Select organizations…</span>
               <i data-lucide="chevron-down" class="multiselect-chevron" aria-hidden="true"></i>
@@ -179,6 +176,8 @@ const Settings = (() => {
 
   // Multi-select dropdown: click-to-open panel with checkboxes.
   // Trigger label updates with selected count / first names.
+  // Noun for the label is taken from `data-ms-noun` on the root, defaults to
+  // 'items'. Pluralised by appending 's' for count > 1.
   function _wireMultiselect(root) {
     if (!root) return;
     const trigger = root.querySelector('[data-ms-trigger]');
@@ -186,10 +185,13 @@ const Settings = (() => {
     const label   = root.querySelector('[data-ms-label]');
     if (!trigger || !panel || !label) return;
 
+    const noun = root.dataset.msNoun || 'items';
+    const placeholder = root.dataset.msPlaceholder || `Select ${noun}…`;
+
     const updateLabel = () => {
       const checked = Array.from(panel.querySelectorAll('input[type=checkbox]:checked'));
       if (!checked.length) {
-        label.textContent = 'Select organizations…';
+        label.textContent = placeholder;
         label.classList.remove('multiselect-label-active');
         return;
       }
@@ -197,7 +199,7 @@ const Settings = (() => {
       const names = checked.map(cb => cb.closest('.multiselect-option')?.querySelector('.multiselect-option-name')?.textContent || '');
       label.textContent = checked.length === 1
         ? names[0]
-        : `${checked.length} organizations selected`;
+        : `${checked.length} ${noun} selected`;
     };
 
     const close = () => root.classList.remove('is-open');
@@ -415,6 +417,75 @@ const Settings = (() => {
     });
   }
 
+  // Singleton popover element for the Users table's "N organizations"
+  // dropdown. Uses position:fixed so it isn't clipped by the .table-wrap
+  // overflow that the row sits inside.
+  let _orgsPopoverEl = null;
+
+  function _closeOrgsPopover() {
+    if (_orgsPopoverEl) { _orgsPopoverEl.remove(); _orgsPopoverEl = null; }
+  }
+
+  function _wireOrgsPopover() {
+    document.querySelectorAll('[data-orgs-popover]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const wasOpen = btn.classList.contains('is-open');
+        document.querySelectorAll('.user-orgs-trigger.is-open').forEach(b => b.classList.remove('is-open'));
+        _closeOrgsPopover();
+        if (wasOpen) return;
+
+        let names = [];
+        try { names = JSON.parse(btn.dataset.orgsPopover) || []; } catch {}
+        if (!names.length) return;
+
+        const pop = document.createElement('div');
+        pop.className = 'user-orgs-popover';
+        pop.innerHTML = `<ul>${names.map(n => `<li>${Utils.escapeHtml(n)}</li>`).join('')}</ul>`;
+        document.body.appendChild(pop);
+
+        // Position relative to the button using viewport coords (fixed).
+        const rect = btn.getBoundingClientRect();
+        const popRect = pop.getBoundingClientRect();
+        let top  = rect.bottom + 4;
+        let left = rect.left;
+        // If it would clip the bottom of the viewport, flip above the button.
+        if (top + popRect.height > window.innerHeight - 8) {
+          top = Math.max(8, rect.top - popRect.height - 4);
+        }
+        // Keep within the right edge.
+        if (left + popRect.width > window.innerWidth - 8) {
+          left = Math.max(8, window.innerWidth - popRect.width - 8);
+        }
+        pop.style.top  = `${top}px`;
+        pop.style.left = `${left}px`;
+
+        btn.classList.add('is-open');
+        _orgsPopoverEl = pop;
+      });
+    });
+
+    // One outside-click handler is enough — re-bind on every render is fine
+    // because we replace the listener target each time.
+    document.addEventListener('click', _onDocClickForOrgs, { once: true, capture: false });
+  }
+
+  function _onDocClickForOrgs(e) {
+    if (_orgsPopoverEl && !_orgsPopoverEl.contains(e.target) && !e.target.closest('[data-orgs-popover]')) {
+      document.querySelectorAll('.user-orgs-trigger.is-open').forEach(b => b.classList.remove('is-open'));
+      _closeOrgsPopover();
+    }
+    document.addEventListener('click', _onDocClickForOrgs, { once: true });
+  }
+
+  // Close popover on scroll (otherwise it floats over content as the table scrolls).
+  document.addEventListener('scroll', () => {
+    if (_orgsPopoverEl) {
+      document.querySelectorAll('.user-orgs-trigger.is-open').forEach(b => b.classList.remove('is-open'));
+      _closeOrgsPopover();
+    }
+  }, true);
+
   /* ── Users: edit (consolidated) ─────────────────────────── */
   // Single modal that handles every per-user mutation:
   //   - display_name
@@ -470,7 +541,7 @@ const Settings = (() => {
 
         <div class="form-group">
           <label class="form-label">Organizations <span class="req">*</span></label>
-          <div class="multiselect" data-field="orgs">
+          <div class="multiselect" data-field="orgs" data-ms-noun="organizations" data-ms-placeholder="Select organizations…">
             <button type="button" class="multiselect-trigger" data-ms-trigger>
               <span class="multiselect-label" data-ms-label>Select organizations…</span>
               <i data-lucide="chevron-down" class="multiselect-chevron" aria-hidden="true"></i>
@@ -632,7 +703,7 @@ const Settings = (() => {
         </div>
         <div class="form-group">
           <label class="form-label">Assign Members <span class="req">*</span></label>
-          <div class="multiselect" data-field="members">
+          <div class="multiselect" data-field="members" data-ms-noun="members" data-ms-placeholder="Select members…">
             <button type="button" class="multiselect-trigger" data-ms-trigger>
               <span class="multiselect-label" data-ms-label>Select members…</span>
               <i data-lucide="chevron-down" class="multiselect-chevron" aria-hidden="true"></i>

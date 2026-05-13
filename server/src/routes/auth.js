@@ -18,8 +18,9 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
 
       if (result.memberships.length === 1) {
         // Single membership: auto-select org and issue tokens immediately.
+        // role on the JWT comes from users.role (canonical), not memberships.role.
         const m           = result.memberships[0];
-        const accessToken = tokenFactory.signAccessToken({ ...result, ...m });
+        const accessToken = tokenFactory.signAccessToken({ ...m, ...result });
         const refreshToken = tokenFactory.signRefreshToken(result.user_id);
 
         return reply.send({
@@ -33,7 +34,7 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
               display_name:    m.org_display_name,
               slug:            m.org_slug,
               membership_id:   m.membership_id,
-              role:            m.role,
+              role:            result.role,
             },
           },
         });
@@ -96,7 +97,8 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
         return reply.code(401).send({ success: false, error: 'Account inactive' });
       }
 
-      const accessToken  = tokenFactory.signAccessToken({ user_id: user.user_id, username: user.username, display_name: user.display_name, ...m });
+      // role on JWT comes from users.role (canonical global role).
+      const accessToken  = tokenFactory.signAccessToken({ ...m, user_id: user.user_id, username: user.username, display_name: user.display_name, role: user.role });
       const refreshToken = tokenFactory.signRefreshToken(user.user_id);
 
       request.log.info(
@@ -110,7 +112,7 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
           access_token:  accessToken,
           refresh_token: refreshToken,
           user: { user_id: user.user_id, username: user.username, display_name: user.display_name },
-          organization: { organization_id: m.organization_id, display_name: m.org_display_name, slug: m.org_slug, membership_id: m.membership_id, role: m.role },
+          organization: { organization_id: m.organization_id, display_name: m.org_display_name, slug: m.org_slug, membership_id: m.membership_id, role: user.role },
         },
       });
     } catch (err) {
@@ -141,7 +143,7 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
       if (!m) return reply.code(403).send({ success: false, error: 'Invalid membership selection' });
 
       const user = await usersRepo.findById(payload.user_id);
-      const accessToken  = tokenFactory.signAccessToken({ user_id: user.user_id, username: user.username, display_name: user.display_name, ...m });
+      const accessToken  = tokenFactory.signAccessToken({ ...m, user_id: user.user_id, username: user.username, display_name: user.display_name, role: user.role });
       const refreshToken = tokenFactory.signRefreshToken(user.user_id);
 
       request.log.info(
@@ -154,7 +156,7 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
         data: {
           access_token:  accessToken,
           refresh_token: refreshToken,
-          organization: { organization_id: m.organization_id, display_name: m.org_display_name, slug: m.org_slug, membership_id: m.membership_id, role: m.role },
+          organization: { organization_id: m.organization_id, display_name: m.org_display_name, slug: m.org_slug, membership_id: m.membership_id, role: user.role },
         },
       });
     } catch (err) {
@@ -199,7 +201,7 @@ export async function authRoutes(fastify, { authService, usersRepo, membershipsR
         return reply.code(401).send({ success: false, error: 'No active membership found' });
       }
 
-      const accessToken  = tokenFactory.signAccessToken({ user_id: user.user_id, username: user.username, display_name: user.display_name, ...m });
+      const accessToken  = tokenFactory.signAccessToken({ ...m, user_id: user.user_id, username: user.username, display_name: user.display_name, role: user.role });
       const refreshToken = tokenFactory.signRefreshToken(user.user_id);
 
       request.log.info({ event: 'token_refresh', user_id: user.user_id }, 'Tokens rotated');

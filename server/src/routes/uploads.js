@@ -123,14 +123,17 @@ export async function uploadsRoutes(fastify, { uploadsService, dashboardService 
           'Update,UID-FROM-EXPORT,,,30,,,,',
           'Remove,UID-FROM-EXPORT,,,,,,, ',
         ].join('\r\n'),
-        // Same convention for orders. uid is the order_row_id field —
-        // exported as UID, paste back in for Update / Remove.
+        // Orders template.
+        //   uid       — INTERNAL row tracker. Leave blank on Add (auto-assigned);
+        //               paste from a previous export for Update / Remove.
+        //   order_id  — EXTERNAL marketplace order number (Amazon order ID,
+        //               eBay sale ID, etc.). Required on Add.
         orders: [
-          'action,uid,order_date,sku,quantity_sold,platform,shipped_from_box',
-          'Add,,2026-05-11,SKU-001,2,Amazon,BX-001',
-          'Add,,2026-05-11,SKU-002,1,eBay,',
-          'Update,UID-FROM-EXPORT,,,3,,',
-          'Remove,UID-FROM-EXPORT,,,,,',
+          'action,uid,order_id,order_date,sku,quantity_sold,platform,shipped_from_box',
+          'Add,,111-2222222-3333333,2026-05-11,SKU-001,2,Amazon,BX-001',
+          'Add,,EBAY-9876543210,2026-05-11,SKU-002,1,eBay,',
+          'Update,UID-FROM-EXPORT,,,,,3,,',
+          'Remove,UID-FROM-EXPORT,,,,,,,',
         ].join('\r\n'),
       };
 

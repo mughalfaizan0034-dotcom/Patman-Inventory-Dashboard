@@ -11,7 +11,7 @@ const Orders = (() => {
   let _sortBy      = 'order_date';
   let _sortDir     = 'desc';
 
-  const COL_COUNT = 6; // Order ID, Order Date, SKU, Qty Sold, Shipped SKU, Platform
+  const COL_COUNT = 7; // UID, Order ID, Order Date, SKU, Qty Sold, Shipped SKU, Platform
 
   /* ── SKU parser ──────────────────────────────────────────── */
   function _parseSku(sku) {
@@ -123,17 +123,24 @@ const Orders = (() => {
       }
 
       const shortId = id ? id.slice(0, 8) : '—';
-      const idCell  = id
+      const uidCell = id
         ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(id)}" style="font-family:'Courier New',monospace;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
+        : `<span style="color:var(--txt-4)">—</span>`;
+
+      const orderIdRaw  = row.order_id || '';
+      const orderIdCell = orderIdRaw
+        ? `<span style="font-family:'Courier New',monospace;font-size:12px;color:var(--txt-1);font-weight:500" title="${Utils.escapeHtml(orderIdRaw)}">${Utils.escapeHtml(orderIdRaw)}</span>`
         : `<span style="color:var(--txt-4)">—</span>`;
 
       return `<tr data-row-id="${Utils.escapeHtml(id)}"
                 data-order-date="${Utils.escapeHtml(row.order_date || '')}"
+                data-order-id="${Utils.escapeHtml(orderIdRaw)}"
                 data-sku="${Utils.escapeHtml(row.sku || '')}"
                 data-qty="${Utils.escapeHtml(String(row.quantity_sold ?? ''))}"
                 data-shipped="${Utils.escapeHtml(shipped)}"
                 data-platform="${Utils.escapeHtml(row.platform || '')}"${trAttr}>
-        <td>${idCell}</td>
+        <td>${uidCell}</td>
+        <td>${orderIdCell}</td>
         <td>${Utils.escapeHtml(row.order_date || '-')}</td>
         <td style="font-weight:500">${Utils.escapeHtml(row.sku || '-')}</td>
         <td class="num"><strong>${Utils.formatNumber(row.quantity_sold)}</strong></td>

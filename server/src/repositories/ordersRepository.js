@@ -42,7 +42,7 @@ export function createOrdersRepository({ bq, projectId }) {
         SELECT DISTINCT sku FROM ${invTable} WHERE organization_id = @organizationId
       )
       SELECT
-        o.order_row_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
+        o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
         COALESCE(o.is_ignored, FALSE)        AS is_ignored,
         (inv.sku IS NULL)                    AS is_unknown
@@ -95,7 +95,7 @@ export function createOrdersRepository({ bq, projectId }) {
         SELECT DISTINCT sku FROM ${invTable} WHERE organization_id = @organizationId
       )
       SELECT
-        o.order_row_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
+        o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
         COALESCE(o.is_ignored, FALSE)        AS is_ignored,
         (inv.sku IS NULL)                    AS is_unknown

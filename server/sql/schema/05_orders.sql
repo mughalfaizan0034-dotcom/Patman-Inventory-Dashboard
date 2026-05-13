@@ -22,8 +22,9 @@
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.orders` (
-  order_row_id         STRING    NOT NULL,
+  order_row_id         STRING    NOT NULL,             -- INTERNAL UID: row tracker for API updates/deletes (do not show as "order ID")
   organization_id      STRING    NOT NULL,
+  order_id             STRING,                          -- EXTERNAL marketplace order ID (Amazon order #, eBay sale ID, etc.) — user-provided
   order_date           STRING    NOT NULL,             -- YYYY-MM-DD; queries use SAFE_CAST(order_date AS DATE)
   sku                  STRING    NOT NULL,             -- feed SKU; may be overridden by shipped_from_box
   quantity_sold        INT64     NOT NULL,

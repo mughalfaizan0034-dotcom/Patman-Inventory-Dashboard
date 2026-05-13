@@ -17,24 +17,25 @@ export const ordersSchema = {
       return { error: { row: lineNum, field: 'action', reason: `action must be Add, Update, or Remove (got "${action}")` } };
     }
 
+    // `uid` is the INTERNAL row tracker (order_row_id) for Update/Remove.
+    // `order_id` is the EXTERNAL marketplace order number (required on Add).
     if (action === 'Remove') {
-      // Accept both `uid` (canonical) and legacy `order_id` for backward compat.
-      const orderId = (raw.uid ?? raw.order_id)?.trim();
-      if (!orderId) {
+      const uid = raw.uid?.trim();
+      if (!uid) {
         return { error: { row: lineNum, field: 'uid', reason: 'uid is required for Remove' } };
       }
-      return { action, row: { organization_id: organizationId, order_row_id: orderId } };
+      return { action, row: { organization_id: organizationId, order_row_id: uid } };
     }
 
     if (action === 'Update') {
-      // Accept both `uid` (canonical) and legacy `order_id` for backward compat.
-      const orderId = (raw.uid ?? raw.order_id)?.trim();
-      if (!orderId) {
+      const uid = raw.uid?.trim();
+      if (!uid) {
         return { error: { row: lineNum, field: 'uid', reason: 'uid is required for Update' } };
       }
 
-      const row = { organization_id: organizationId, order_row_id: orderId };
+      const row = { organization_id: organizationId, order_row_id: uid };
 
+      if (raw.order_id?.trim()) row.order_id = safeString(raw.order_id);
       if (raw.order_date?.trim()) {
         const orderDate = normalizeDate(raw.order_date);
         if (!orderDate) {
@@ -55,7 +56,12 @@ export const ordersSchema = {
       return { action, row };
     }
 
-    // Add: all fields required (original behavior)
+    // Add: all fields required (original behavior).
+    // order_id (marketplace order number) is now required so every order has
+    // a human-meaningful identifier in addition to the internal UID.
+    if (!raw.order_id?.trim()) {
+      return { error: { row: lineNum, field: 'order_id', value: raw.order_id, reason: 'order_id is required (marketplace order number, e.g. Amazon order ID)' } };
+    }
     if (!raw.order_date?.trim()) {
       return { error: { row: lineNum, field: 'order_date', value: raw.order_date, reason: 'order_date is required' } };
     }
@@ -80,6 +86,7 @@ export const ordersSchema = {
       row: {
         order_row_id:     randomUUID(),
         organization_id:  organizationId,
+        order_id:         safeString(raw.order_id),
         order_date:       orderDate,
         sku:              safeString(raw.sku),
         quantity_sold:    qty.value,
