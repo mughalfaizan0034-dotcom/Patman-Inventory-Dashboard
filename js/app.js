@@ -142,6 +142,50 @@ const Settings = (() => {
     q('[data-form="user"]')?.addEventListener('submit', e => { e.preventDefault(); _doCreateUser(m, q, qf); });
 
     _wireUsernameCheck(q);
+    _wireMultiselect(q('[data-field="orgs"]'));
+  }
+
+  // Multi-select dropdown: click-to-open panel with checkboxes.
+  // Trigger label updates with selected count / first names.
+  function _wireMultiselect(root) {
+    if (!root) return;
+    const trigger = root.querySelector('[data-ms-trigger]');
+    const panel   = root.querySelector('[data-ms-panel]');
+    const label   = root.querySelector('[data-ms-label]');
+    if (!trigger || !panel || !label) return;
+
+    const updateLabel = () => {
+      const checked = Array.from(panel.querySelectorAll('input[type=checkbox]:checked'));
+      if (!checked.length) {
+        label.textContent = 'Select organizations…';
+        label.classList.remove('multiselect-label-active');
+        return;
+      }
+      label.classList.add('multiselect-label-active');
+      const names = checked.map(cb => cb.closest('.multiselect-option')?.querySelector('.multiselect-option-name')?.textContent || '');
+      label.textContent = checked.length === 1
+        ? names[0]
+        : `${checked.length} organizations selected`;
+    };
+
+    const close = () => root.classList.remove('is-open');
+    const toggle = () => root.classList.toggle('is-open');
+
+    trigger.addEventListener('click', e => { e.stopPropagation(); toggle(); });
+    panel.addEventListener('click', e => e.stopPropagation());
+    panel.addEventListener('change', e => {
+      if (e.target?.matches('input[type=checkbox]')) updateLabel();
+    });
+
+    // Close on outside click or Esc
+    document.addEventListener('click', e => {
+      if (!root.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') close();
+    });
+
+    updateLabel();
   }
 
   // Tracks the last username verified as available. Submit is blocked unless
