@@ -62,9 +62,8 @@ const Settings = (() => {
 
   /* ── Users: add new ─────────────────────────────────────── */
   async function _openAddNewUserModal() {
-    const currentOrg = Auth.getOrganization();
-
-    // Fetch the full org list up-front so the multi-select renders immediately.
+    // Fetch the full org list up-front. Settings is org-neutral — we do NOT
+    // pre-select the admin's current workspace. The admin chooses explicitly.
     let allOrgs = [];
     try {
       allOrgs = await API.getOrganizations();
@@ -97,24 +96,27 @@ const Settings = (() => {
         <div class="form-group">
           <label class="form-label">Role <span class="req">*</span></label>
           <select class="form-select" data-field="role">${_roleOptions('viewer')}</select>
-          <div class="form-hint">Applied to every assigned organization below.</div>
+          <div class="form-hint">Applied to every assigned organization.</div>
         </div>
 
         <div class="form-group">
           <label class="form-label">Organizations <span class="req">*</span></label>
-          <div data-field="orgs" class="org-checklist">
-            ${assignableOrgs.map(o => {
-              const isCurrent = o.organization_id === currentOrg?.organization_id;
-              return `
-                <label class="org-checkbox${isCurrent ? ' org-checkbox-locked' : ''}">
-                  <input type="checkbox" value="${Utils.escapeHtml(o.organization_id)}"
-                         ${isCurrent ? 'checked disabled' : ''}>
-                  <span class="org-checkbox-name">${Utils.escapeHtml(o.display_name)}</span>
-                  ${isCurrent ? '<span class="org-checkbox-tag">Current</span>' : ''}
-                </label>`;
-            }).join('')}
+          <div class="multiselect" data-field="orgs">
+            <button type="button" class="multiselect-trigger" data-ms-trigger>
+              <span class="multiselect-label" data-ms-label>Select organizations…</span>
+              <i data-lucide="chevron-down" class="multiselect-chevron" aria-hidden="true"></i>
+            </button>
+            <div class="multiselect-panel" data-ms-panel>
+              ${assignableOrgs.length === 0
+                ? '<div class="multiselect-empty">No active organizations available.</div>'
+                : assignableOrgs.map(o => `
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="${Utils.escapeHtml(o.organization_id)}">
+                    <span class="multiselect-option-name">${Utils.escapeHtml(o.display_name)}</span>
+                  </label>`).join('')}
+            </div>
           </div>
-          <div class="form-hint">User must belong to at least one organization. Your current workspace is auto-assigned.</div>
+          <div class="form-hint">Assign the user to at least one organization. Roles apply across all selected orgs.</div>
         </div>
 
         <div data-field="error" class="form-error" style="display:none"></div>
