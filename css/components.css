@@ -199,6 +199,138 @@
   letter-spacing: .01em;
 }
 
+/* ── Org switcher (top-bar dropdown) ────────────────────────── */
+.org-switcher {
+  position: relative;
+  user-select: none;
+}
+
+.org-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--txt-1);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur), border-color var(--dur), box-shadow var(--dur);
+}
+.org-switcher-trigger:hover {
+  background: var(--surface-3);
+  border-color: var(--border-2);
+}
+.org-switcher.is-open .org-switcher-trigger {
+  background: var(--surface-3);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.org-switcher-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.org-switcher-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-switcher-chevron {
+  width: 13px;
+  height: 13px;
+  color: var(--txt-4);
+  transition: transform var(--dur) var(--ease), color var(--dur);
+  flex-shrink: 0;
+}
+.org-switcher.is-open .org-switcher-chevron {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.org-switcher-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-lg);
+  z-index: 500;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity var(--dur) var(--ease),
+              transform var(--dur) var(--ease),
+              visibility 0s linear var(--dur);
+  padding: 4px;
+}
+.org-switcher.is-open .org-switcher-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity var(--dur) var(--ease),
+              transform var(--dur) var(--ease),
+              visibility 0s;
+}
+
+.org-switch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur);
+}
+.org-switch-item:hover {
+  background: var(--surface-3);
+}
+.org-switch-item.active {
+  background: var(--primary-50);
+}
+.org-switch-item.active .org-switch-item-name {
+  color: var(--primary-text);
+}
+
+.org-switch-item-text {
+  flex: 1;
+  min-width: 0;
+}
+.org-switch-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-switch-item-role {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--txt-4);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-top: 2px;
+}
+.org-switch-item-check {
+  width: 16px;
+  height: 16px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
 /* ── Button loading state ───────────────────────────────────── */
 .btn-loading { pointer-events: none; }
 .btn-loading::after {

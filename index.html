@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory Dashboard</title>
 
-  <!-- CSS â€” v=38: bump on every deploy to bust browser/CDN cache -->
-  <link rel="stylesheet" href="css/main.css?v=38">
-  <link rel="stylesheet" href="css/layout.css?v=38">
-  <link rel="stylesheet" href="css/components.css?v=38">
-  <link rel="stylesheet" href="css/tables.css?v=38">
-  <link rel="stylesheet" href="css/forms.css?v=38">
-  <link rel="stylesheet" href="css/animations.css?v=38">
+  <!-- CSS â€” v=39: bump on every deploy to bust browser/CDN cache -->
+  <link rel="stylesheet" href="css/main.css?v=39">
+  <link rel="stylesheet" href="css/layout.css?v=39">
+  <link rel="stylesheet" href="css/components.css?v=39">
+  <link rel="stylesheet" href="css/tables.css?v=39">
+  <link rel="stylesheet" href="css/forms.css?v=39">
+  <link rel="stylesheet" href="css/animations.css?v=39">
 
   <!-- Favicon: Lucide "package" icon in brand blue -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpolyline points='3.27 6.96 12 12.01 20.73 6.96'/%3E%3Cline x1='12' y1='22.08' x2='12' y2='12'/%3E%3C/svg%3E">
@@ -136,12 +136,13 @@
         <div id="topbar-title" class="topbar-title">Dashboard</div>
         <div class="topbar-actions">
           <!-- Org switcher â€” hidden when user has only one org -->
-          <div id="org-switcher" style="display:none;position:relative;cursor:pointer;user-select:none">
-            <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#fff;padding:6px 11px;border:none;border-radius:var(--r-sm);background:var(--primary);transition:background .15s" onmouseover="this.style.background='var(--primary-dark,#1d4ed8)'" onmouseout="this.style.background='var(--primary)'">
-              <span id="current-org-name">&mdash;</span>
-              <i data-lucide="chevron-down" class="icon" style="width:12px;height:12px;color:rgba(255,255,255,.75)"></i>
-            </div>
-            <div id="org-switcher-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);min-width:180px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow-md);z-index:200;overflow:hidden"></div>
+          <div id="org-switcher" class="org-switcher" style="display:none">
+            <button type="button" id="org-switcher-trigger" class="org-switcher-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <i data-lucide="building-2" class="icon org-switcher-icon" aria-hidden="true"></i>
+              <span id="current-org-name" class="org-switcher-name">&mdash;</span>
+              <i data-lucide="chevron-down" class="icon org-switcher-chevron" aria-hidden="true"></i>
+            </button>
+            <div id="org-switcher-dropdown" class="org-switcher-dropdown" role="listbox"></div>
           </div>
           <button id="topbar-refresh-btn" title="Refresh" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:none;border-radius:var(--r-sm);background:var(--primary);color:#fff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--primary-dark,#1d4ed8)'" onmouseout="this.style.background='var(--primary)'">
             <i data-lucide="refresh-cw" class="icon" style="width:15px;height:15px"></i>
@@ -674,19 +675,19 @@
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
   <!-- App modules â€” order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=38 â€” bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=38"></script>
-  <script src="js/icons.js?v=38"></script>
-  <script src="js/notifications.js?v=38"></script>
-  <script src="js/loading.js?v=38"></script>
-  <script src="js/api.js?v=38"></script>
-  <script src="js/metricsEngine.js?v=38"></script>
-  <script src="js/auth.js?v=38"></script>
-  <script src="js/dashboard.js?v=38"></script>
-  <script src="js/inventory.js?v=38"></script>
-  <script src="js/orders.js?v=38"></script>
-  <script src="js/uploads.js?v=38"></script>
-  <script src="js/app.js?v=38"></script>
+  <!-- v=39 â€” bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=39"></script>
+  <script src="js/icons.js?v=39"></script>
+  <script src="js/notifications.js?v=39"></script>
+  <script src="js/loading.js?v=39"></script>
+  <script src="js/api.js?v=39"></script>
+  <script src="js/metricsEngine.js?v=39"></script>
+  <script src="js/auth.js?v=39"></script>
+  <script src="js/dashboard.js?v=39"></script>
+  <script src="js/inventory.js?v=39"></script>
+  <script src="js/orders.js?v=39"></script>
+  <script src="js/uploads.js?v=39"></script>
+  <script src="js/app.js?v=39"></script>
 
 </body>
 </html>

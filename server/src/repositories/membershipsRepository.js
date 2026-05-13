@@ -1,15 +1,4 @@
-/*
-  BigQuery DDL (run once in console):
-
-  CREATE TABLE IF NOT EXISTS `patman_inventory.memberships` (
-    membership_id   STRING NOT NULL,
-    user_id         STRING NOT NULL,
-    organization_id STRING NOT NULL,
-    role            STRING NOT NULL,
-    is_active       BOOL   NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMP
-  );
-*/
+// Canonical DDL: see server/sql/schema/03_memberships.sql
 import { TABLES } from '../config/tables.js';
 
 export function createMembershipsRepository({ bq, projectId }) {

@@ -742,40 +742,77 @@ const App = (() => {
     if (switcherEl) switcherEl.style.display = memberships.length > 1 ? '' : 'none';
   }
 
+  // Idempotent — binds the org switcher once per session, even if showApp()
+  // is called multiple times (e.g., after switching orgs).
+  let _orgSwitcherBound = false;
   function _bindOrgSwitcher() {
+    if (_orgSwitcherBound) return;
     const switcher = document.getElementById('org-switcher');
     const dropdown = document.getElementById('org-switcher-dropdown');
-    if (!switcher || !dropdown) return;
+    const trigger  = document.getElementById('org-switcher-trigger');
+    if (!switcher || !dropdown || !trigger) return;
+    _orgSwitcherBound = true;
 
-    switcher.addEventListener('click', () => {
+    function _renderDropdown() {
       const memberships = Auth.getMemberships();
       const currentOrg  = Auth.getOrganization();
-      dropdown.innerHTML = memberships.map(m => `
-        <div class="org-switch-item ${m.membership_id === currentOrg?.membership_id ? 'active' : ''}"
-             data-membership-id="${Utils.escapeHtml(m.membership_id)}"
-             style="padding:10px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:space-between;${m.membership_id === currentOrg?.membership_id ? 'background:var(--surface-2);font-weight:600' : ''}">
-          <span>${Utils.escapeHtml(m.display_name)}</span>
-          ${m.membership_id === currentOrg?.membership_id ? '<i data-lucide="check" class="icon" style="width:14px;height:14px;color:var(--success)" aria-hidden="true"></i>' : ''}
-        </div>`
-      ).join('');
-      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      dropdown.innerHTML = memberships.map(m => {
+        const active = m.membership_id === currentOrg?.membership_id;
+        return `
+          <div class="org-switch-item${active ? ' active' : ''}"
+               data-membership-id="${Utils.escapeHtml(m.membership_id)}">
+            <div class="org-switch-item-text">
+              <div class="org-switch-item-name">${Utils.escapeHtml(m.display_name)}</div>
+              <div class="org-switch-item-role">${Utils.escapeHtml(Utils.capitalize(m.role || ''))}</div>
+            </div>
+            ${active ? '<i data-lucide="check" class="icon org-switch-item-check" aria-hidden="true"></i>' : ''}
+          </div>`;
+      }).join('');
+      // The icons MutationObserver picks up the new <i data-lucide> nodes,
+      // but call refresh() anyway to render them on the same tick.
+      Icons?.refresh?.();
+    }
+
+    function _open() {
+      _renderDropdown();
+      switcher.classList.add('is-open');
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+    function _close() {
+      switcher.classList.remove('is-open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+    function _toggle() {
+      if (switcher.classList.contains('is-open')) _close(); else _open();
+    }
+
+    // Trigger button toggles the dropdown
+    trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      _toggle();
     });
 
+    // Dropdown item click → switch org
     dropdown.addEventListener('click', async e => {
       const item = e.target.closest('[data-membership-id]');
       if (!item) return;
-      dropdown.style.display = 'none';
+      e.stopPropagation();
+      _close();
       const mid = item.dataset.membershipId;
-      if (mid !== Auth.getOrganization()?.membership_id) {
+      if (mid && mid !== Auth.getOrganization()?.membership_id) {
         await Auth.switchOrg(mid);
         _bindSidebarUser();
       }
     });
 
+    // Click anywhere outside → close
     document.addEventListener('click', e => {
-      if (!switcher.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.style.display = 'none';
-      }
+      if (!switcher.contains(e.target)) _close();
+    });
+
+    // Esc to close
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') _close();
     });
   }
 
