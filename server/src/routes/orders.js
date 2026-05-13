@@ -75,7 +75,7 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
       });
 
       const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const header = 'Order ID,Order Date,SKU,Qty Sold,Shipped SKU,Platform';
+      const header = 'UID,Order Date,SKU,Qty Sold,Shipped SKU,Platform';
       const lines  = rows.map(r => [
         r.order_row_id,
         r.order_date,

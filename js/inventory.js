@@ -364,7 +364,7 @@ const InventoryList = (() => {
     _total = total || 0;
     const tbody   = document.getElementById('inventory-tbody');
     const info    = document.getElementById('inventory-info');
-    const canEdit = Auth.hasRole('staff');
+    const canEdit = Auth.hasRole('manager');
     if (!tbody) return;
 
     if (!items || !items.length) {
@@ -385,13 +385,21 @@ const InventoryList = (() => {
       const undefBadge = isUndef ? ` <span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
       const rowBg      = isUndef ? ' style="background:rgba(234,179,8,.06)"' : isPhantom ? ' class="row-phantom"' : '';
 
-      return `<tr data-sku="${Utils.escapeHtml(item.sku || '')}"
+      const uid     = item.row_uid || '';
+      const shortId = uid ? uid.slice(0, 8) : '—';
+      const uidCell = uid
+        ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(uid)}" style="font-family:'Courier New',monospace;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
+        : `<span style="color:var(--txt-4)">—</span>`;
+
+      return `<tr data-uid="${Utils.escapeHtml(uid)}"
+                  data-sku="${Utils.escapeHtml(item.sku || '')}"
                   data-upc="${Utils.escapeHtml(item.upc || '')}"
                   data-qty="${Utils.escapeHtml(String(qty))}"
                   data-part="${Utils.escapeHtml(item.part_number || '')}"
                   data-box="${Utils.escapeHtml(item.box_number || '')}"
                   data-notes="${Utils.escapeHtml(item.notes || '')}"
                   data-date="${Utils.escapeHtml(item.date_added || '')}"${rowBg}>
+        <td>${uidCell}</td>
         <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}</td>
         <td>${Utils.escapeHtml(item.box_number || '—')}</td>
         <td>${Utils.escapeHtml(item.part_number || '—')}</td>
@@ -403,10 +411,25 @@ const InventoryList = (() => {
         <td>${Utils.formatDate(item.date_added)}</td>
         <td style="font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(item.notes || '—')}</td>
         <td style="width:36px;text-align:center;padding:0 4px">
-          ${canEdit ? `<button class="btn btn-ghost btn-icon btn-sm inv-edit-btn" data-sku="${Utils.escapeHtml(item.sku || '')}" title="Edit" style="opacity:.6"><i data-lucide="pencil" class="icon" style="width:13px;height:13px"></i></button>` : ''}
+          ${canEdit ? `<button class="btn btn-ghost btn-icon btn-sm inv-edit-btn" title="Edit" style="opacity:.6"><i data-lucide="pencil" class="icon" style="width:13px;height:13px"></i></button>` : ''}
         </td>
       </tr>`;
     }).join('');
+
+    // Click-to-copy full UID
+    tbody.querySelectorAll('.row-uid').forEach(el => {
+      el.addEventListener('click', async e => {
+        e.stopPropagation();
+        const fullId = el.closest('tr')?.dataset.uid || '';
+        if (!fullId) return;
+        try {
+          await navigator.clipboard.writeText(fullId);
+          Notify.success('Copied', `UID ${fullId.slice(0, 8)}… copied`);
+        } catch {
+          Notify.warning('Copy failed', 'Could not access clipboard');
+        }
+      });
+    });
 
     if (canEdit) {
       tbody.querySelectorAll('.inv-edit-btn').forEach(btn => {
@@ -496,7 +519,7 @@ const InventoryList = (() => {
             saveBtn.textContent = 'Save Changes';
             return;
           }
-          await API.updateInventory(tr.dataset.sku, updates);
+          await API.updateInventory(tr.dataset.uid, updates);
           // Inventory edit changes initial stock → invalidate canonical KPIs.
           MetricsEngine.invalidate();
           Notify.success('Saved', 'Inventory row updated');

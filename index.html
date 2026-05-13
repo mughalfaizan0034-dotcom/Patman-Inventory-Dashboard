@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory Dashboard</title>
 
-  <!-- CSS â€” v=44: bump on every deploy to bust browser/CDN cache -->
-  <link rel="stylesheet" href="css/main.css?v=44">
-  <link rel="stylesheet" href="css/layout.css?v=44">
-  <link rel="stylesheet" href="css/components.css?v=44">
-  <link rel="stylesheet" href="css/tables.css?v=44">
-  <link rel="stylesheet" href="css/forms.css?v=44">
-  <link rel="stylesheet" href="css/animations.css?v=44">
+  <!-- CSS â€” v=45: bump on every deploy to bust browser/CDN cache -->
+  <link rel="stylesheet" href="css/main.css?v=45">
+  <link rel="stylesheet" href="css/layout.css?v=45">
+  <link rel="stylesheet" href="css/components.css?v=45">
+  <link rel="stylesheet" href="css/tables.css?v=45">
+  <link rel="stylesheet" href="css/forms.css?v=45">
+  <link rel="stylesheet" href="css/animations.css?v=45">
 
   <!-- Favicon: Lucide "package" icon in brand blue -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpolyline points='3.27 6.96 12 12.01 20.73 6.96'/%3E%3Cline x1='12' y1='22.08' x2='12' y2='12'/%3E%3C/svg%3E">
@@ -335,6 +335,7 @@
               <table class="data-table" id="inventory-table">
                 <thead>
                   <tr>
+                    <th style="width:110px">UID</th>
                     <th data-sort="sku">SKU</th>
                     <th data-sort="box_number">Box #</th>
                     <th data-sort="part_number">Part #</th>
@@ -387,7 +388,7 @@
               <table class="data-table" id="orders-table">
                 <thead>
                   <tr>
-                    <th style="width:120px">Order ID</th>
+                    <th style="width:110px">UID</th>
                     <th data-sort="order_date">Order Date</th>
                     <th data-sort="sku">SKU</th>
                     <th class="num" data-sort="quantity_sold">Qty Sold</th>
@@ -675,19 +676,19 @@
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
   <!-- App modules â€” order matters: utilities first, then API/auth, then features, app last -->
-  <!-- v=44 â€” bump this number on every deploy to bust browser/CDN cache -->
-  <script src="js/utilities.js?v=44"></script>
-  <script src="js/icons.js?v=44"></script>
-  <script src="js/notifications.js?v=44"></script>
-  <script src="js/loading.js?v=44"></script>
-  <script src="js/api.js?v=44"></script>
-  <script src="js/metricsEngine.js?v=44"></script>
-  <script src="js/auth.js?v=44"></script>
-  <script src="js/dashboard.js?v=44"></script>
-  <script src="js/inventory.js?v=44"></script>
-  <script src="js/orders.js?v=44"></script>
-  <script src="js/uploads.js?v=44"></script>
-  <script src="js/app.js?v=44"></script>
+  <!-- v=45 â€” bump this number on every deploy to bust browser/CDN cache -->
+  <script src="js/utilities.js?v=45"></script>
+  <script src="js/icons.js?v=45"></script>
+  <script src="js/notifications.js?v=45"></script>
+  <script src="js/loading.js?v=45"></script>
+  <script src="js/api.js?v=45"></script>
+  <script src="js/metricsEngine.js?v=45"></script>
+  <script src="js/auth.js?v=45"></script>
+  <script src="js/dashboard.js?v=45"></script>
+  <script src="js/inventory.js?v=45"></script>
+  <script src="js/orders.js?v=45"></script>
+  <script src="js/uploads.js?v=45"></script>
+  <script src="js/app.js?v=45"></script>
 
 </body>
 </html>

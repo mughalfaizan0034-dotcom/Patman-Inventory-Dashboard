@@ -90,7 +90,7 @@ const Orders = (() => {
     _total = total || 0;
     const tbody   = document.getElementById('orders-tbody');
     const info    = document.getElementById('orders-info');
-    const canEdit = Auth.hasRole('staff');
+    const canEdit = Auth.hasRole('manager');
     if (!tbody) return;
 
     if (!rows || !rows.length) {
@@ -124,7 +124,7 @@ const Orders = (() => {
 
       const shortId = id ? id.slice(0, 8) : '—';
       const idCell  = id
-        ? `<span class="order-id" title="Click to copy full ID&#10;${Utils.escapeHtml(id)}" style="font-family:'Courier New',monospace;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
+        ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(id)}" style="font-family:'Courier New',monospace;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
         : `<span style="color:var(--txt-4)">—</span>`;
 
       return `<tr data-row-id="${Utils.escapeHtml(id)}"
@@ -153,15 +153,15 @@ const Orders = (() => {
       });
     }
 
-    // Click-to-copy full order ID
-    tbody.querySelectorAll('.order-id').forEach(el => {
+    // Click-to-copy full UID
+    tbody.querySelectorAll('.row-uid').forEach(el => {
       el.addEventListener('click', async e => {
         e.stopPropagation();
         const fullId = el.closest('tr')?.dataset.rowId || '';
         if (!fullId) return;
         try {
           await navigator.clipboard.writeText(fullId);
-          Notify.success('Copied', `Order ID ${fullId.slice(0, 8)}… copied to clipboard`);
+          Notify.success('Copied', `UID ${fullId.slice(0, 8)}… copied`);
         } catch {
           Notify.warning('Copy failed', 'Could not access clipboard');
         }

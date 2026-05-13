@@ -296,8 +296,9 @@ const API = (() => {
 
     /* Inventory */
     async getInventoryAlternatives(sku)                                        { return _crGet('/inventory/alternatives', { sku }); },
-    async updateInventory(originalSku, updates)                                { return _crPatch(`/inventory/${encodeURIComponent(originalSku)}`, updates); },
-    async deleteInventoryRows(skus)                                            { return _crDelete('/inventory/rows', { skus }); },
+    // rowUid is the canonical inventory row tracker (NOT the SKU — SKUs can be duplicated).
+    async updateInventory(rowUid, updates)                                     { return _crPatch(`/inventory/${encodeURIComponent(rowUid)}`, updates); },
+    async deleteInventoryRows(rowUids)                                         { return _crDelete('/inventory/rows', { row_uids: rowUids }); },
 
     /* Activity */
     async getActivity(limit=10)                                                { return _crGet('/activity', { limit }); },
