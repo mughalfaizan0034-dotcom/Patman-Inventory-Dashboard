@@ -11,7 +11,11 @@ import { env } from '../config/env.js';
 // migration runs — that is intentional.
 
 const V2_COLS = ['is_ignored', 'mapped_inventory_sku', 'ignored_at', 'ignored_by', 'mapped_at', 'mapped_by'];
-const V2_SCHEMA_RE = new RegExp(`Unrecognized name: (${V2_COLS.join('|')})`);
+// BigQuery uses two error message formats depending on context:
+//   "Unrecognized name: is_ignored at [..]"
+//   "Name is_ignored not found inside o at [..]"
+// Catch both so the fallback works regardless of which formulation surfaces.
+const V2_SCHEMA_RE = new RegExp(`(?:Unrecognized name: (?:${V2_COLS.join('|')}))|(?:Name (?:${V2_COLS.join('|')}) not found)`);
 
 function isV2SchemaError(err) {
   const texts = [err?.message, ...(err?.errors || []).map(e => e?.message)].filter(Boolean);

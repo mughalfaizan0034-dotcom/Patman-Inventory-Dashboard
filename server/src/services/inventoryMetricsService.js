@@ -34,7 +34,6 @@ export function createInventoryMetricsService({ bq, projectId }) {
         SUM(quantity_sold) AS ordered
       FROM ${ordTable}
       WHERE organization_id = @organizationId
-        AND COALESCE(is_ignored, FALSE) = FALSE
       GROUP BY effective_sku
     )`;
 
@@ -92,17 +91,16 @@ export function createInventoryMetricsService({ bq, projectId }) {
     // The shipped_from_box override + ARA-pattern reassignment compute the effective
     // SKU; if that effective SKU resolves to an inventory row, the order counts as
     // fulfilled (not undefined). A manual mapping (mapped_inventory_sku) also rescues it.
+    // The legacy is_ignored column has been dropped (Phase D). All orders
+    // visible to the system are now considered live. ignored_orders is
+    // therefore always 0 — kept in the returned shape for backward compat
+    // until any frontend reference is removed.
     const ordersQuery = `
       SELECT
         COUNT(*)                                      AS total_orders,
         SUM(quantity_sold)                            AS units_sold_raw,
         COUNT(DISTINCT CASE WHEN platform IS NOT NULL THEN platform END) AS active_platforms,
-        (
-          SELECT COUNT(*)
-          FROM ${ordTable} o2
-          WHERE o2.organization_id = @organizationId
-            AND COALESCE(o2.is_ignored, FALSE) = TRUE
-        ) AS ignored_orders,
+        0                                             AS ignored_orders,
         (
           SELECT COUNT(DISTINCT o2.effective_sku)
           FROM (
@@ -118,7 +116,6 @@ export function createInventoryMetricsService({ bq, projectId }) {
               mapped_inventory_sku
             FROM ${ordTable}
             WHERE organization_id = @organizationId
-              AND COALESCE(is_ignored, FALSE) = FALSE
           ) o2
           WHERE COALESCE(o2.mapped_inventory_sku, '') = ''
             AND o2.effective_sku NOT IN (
@@ -127,7 +124,6 @@ export function createInventoryMetricsService({ bq, projectId }) {
         ) AS undefined_sku_orders
       FROM ${ordTable}
       WHERE organization_id = @organizationId
-        AND COALESCE(is_ignored, FALSE) = FALSE
     `;
 
     try {

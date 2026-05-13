@@ -9,10 +9,9 @@ export function createDashboardRepository({ bq, projectId }) {
     const pTypes = { platform: 'STRING' };
     const platCond = `AND (@platform IS NULL OR platform = @platform)`;
 
-    // Every query below must mirror the KPI engine's order filter — exclude
-    // is_ignored rows. Without this, charts show 6 orders while the KPI
-    // card shows 0 because the KPI engine filters out soft-deleted rows.
-    const notIgnored = `AND COALESCE(is_ignored, FALSE) = FALSE`;
+    // The legacy is_ignored column has been dropped (Phase D). Every order
+    // in the table is live, so no soft-delete filter is needed.
+    const notIgnored = '';
 
     const weeklyQuery = `
       SELECT

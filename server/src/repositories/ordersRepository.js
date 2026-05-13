@@ -6,17 +6,13 @@ export function createOrdersRepository({ bq, projectId }) {
 
   // Build the WHERE clause extension for the status filter.
   // Phantom is aggregate-only — never determined at order-row level.
-  // is_ignored rows are excluded from all views (legacy field; no new rows set via API).
+  // The legacy is_ignored column has been dropped from BigQuery (Phase D),
+  // so no soft-delete filtering is needed here anymore.
   function _statusCondition(status) {
     switch (status) {
-      case 'unknown':
-        return `AND inv.sku IS NULL
-                AND COALESCE(o.is_ignored, FALSE) = FALSE`;
-      case 'normal':
-        return `AND inv.sku IS NOT NULL
-                AND COALESCE(o.is_ignored, FALSE) = FALSE`;
-      default: // 'all'
-        return `AND COALESCE(o.is_ignored, FALSE) = FALSE`;
+      case 'unknown': return `AND inv.sku IS NULL`;
+      case 'normal':  return `AND inv.sku IS NOT NULL`;
+      default:        return '';
     }
   }
 
@@ -44,7 +40,6 @@ export function createOrdersRepository({ bq, projectId }) {
       SELECT
         o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
-        COALESCE(o.is_ignored, FALSE)        AS is_ignored,
         (inv.sku IS NULL)                    AS is_unknown
       FROM ${table} o
       LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.sku) = inv.sku
@@ -97,7 +92,6 @@ export function createOrdersRepository({ bq, projectId }) {
       SELECT
         o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
-        COALESCE(o.is_ignored, FALSE)        AS is_ignored,
         (inv.sku IS NULL)                    AS is_unknown
       FROM ${table} o
       LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.sku) = inv.sku
