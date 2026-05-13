@@ -388,33 +388,29 @@
   color: var(--primary);
 }
 
+/* Panel flows inline within the form — expands the form vertically
+   when opened rather than overlaying, so the modal scrolls naturally
+   and the footer (Cancel / Create User) stays visible below. */
 .multiselect-panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  max-height: 240px;
-  overflow-y: auto;
+  max-height: 0;
+  overflow: hidden;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 500;
-  padding: 4px;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  transition: opacity var(--dur) var(--ease),
-              transform var(--dur) var(--ease),
-              visibility 0s linear var(--dur);
+  margin-top: 0;
+  padding: 0 4px;
+  transition: max-height 220ms var(--ease),
+              margin-top var(--dur) var(--ease),
+              padding var(--dur) var(--ease),
+              border-color var(--dur) var(--ease);
 }
 .multiselect.is-open .multiselect-panel {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-  transition: opacity var(--dur) var(--ease),
-              transform var(--dur) var(--ease),
-              visibility 0s;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 6px;
+  padding: 4px;
+  border-color: var(--border);
+  box-shadow: var(--shadow-xs);
 }
 
 .multiselect-option {

@@ -63,7 +63,7 @@ export async function usersRoutes(fastify, { usersService }) {
     }
   });
 
-  // Create new global user + membership in current org.
+  // Create new global user + membership(s).
   fastify.post('/', { preHandler: [authenticate, requireRole('admin')] }, async (request, reply) => {
     const parsed = createUserSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -78,7 +78,15 @@ export async function usersRoutes(fastify, { usersService }) {
         return reply.code(err.statusCode).send({ success: false, error: err.message });
       }
       request.log.error({ err }, 'User create error');
-      return reply.code(500).send({ success: false, error: 'Internal server error' });
+
+      // Surface the underlying error so schema mismatches are diagnosable.
+      // BigQuery returns descriptive messages for NOT NULL violations etc.
+      const raw = err?.message || String(err);
+      let hint = '';
+      if (/not null|cannot be null|required field/i.test(raw)) {
+        hint = ' — looks like the users table still has legacy NOT NULL columns. Run the Phase B migration (server/sql/migrations/20260513_003).';
+      }
+      return reply.code(500).send({ success: false, error: `User create failed: ${raw}${hint}` });
     }
   });
 
