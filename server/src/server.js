@@ -160,7 +160,7 @@ export async function buildApp() {
     fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService, dashboardService });
     fastify.register(usersRoutes,         { prefix: '/users',         usersService });
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
-    fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo });
+    fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo, usersRepo });
     fastify.register(activityRoutes,      { prefix: '/activity',      activityService });
     fastify.register(lookupRoutes,        { prefix: '/lookup',        lookupService });
     console.log('[BOOT] all route plugins registered');

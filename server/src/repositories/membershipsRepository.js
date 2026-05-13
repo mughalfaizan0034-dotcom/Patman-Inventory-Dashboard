@@ -21,6 +21,19 @@ export function createMembershipsRepository({ bq, projectId }) {
     return rows;
   }
 
+  // Mirror of findAllByUser, keyed by organization. Used by the
+  // org-edit flow to sync the member roster.
+  async function findAllByOrg(organizationId) {
+    const query = `
+      SELECT membership_id, user_id, organization_id, role, is_active, created_at
+      FROM ${table}
+      WHERE organization_id = @organizationId
+      ORDER BY created_at
+    `;
+    const [rows] = await bq.query({ query, params: { organizationId } });
+    return rows;
+  }
+
   async function getUserMemberships(userId) {
     const query = `
       SELECT m.membership_id, m.user_id, m.organization_id, m.role, m.is_active, m.created_at,
@@ -97,7 +110,8 @@ export function createMembershipsRepository({ bq, projectId }) {
   }
 
   return {
-    getUserMemberships, findAllByUser, getMembershipById, getMembership,
+    getUserMemberships, findAllByUser, findAllByOrg,
+    getMembershipById, getMembership,
     getMembersByOrg, createMembership, updateMembership,
   };
 }
