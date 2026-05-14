@@ -47,7 +47,7 @@ export async function uploadsRoutes(fastify, { uploadsService, dashboardService 
           return reply.code(err.statusCode).send({ success: false, error: err.message });
         }
         request.log.error({ err }, 'Inventory upload error');
-        return reply.code(500).send({ success: false, error: 'Internal server error' });
+        return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
       }
     }
   );
@@ -83,7 +83,7 @@ export async function uploadsRoutes(fastify, { uploadsService, dashboardService 
           return reply.code(err.statusCode).send({ success: false, error: err.message });
         }
         request.log.error({ err }, 'Orders upload error');
-        return reply.code(500).send({ success: false, error: 'Internal server error' });
+        return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
       }
     }
   );
