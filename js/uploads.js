@@ -1,20 +1,23 @@
 /* ============================================================
-   uploads.js — TXT file upload workflow, history, templates.
+   uploads.js — TSV file upload workflow, history, templates.
 
-   Accepted upload format: UTF-8 tab-delimited .txt ONLY.
+   Accepted upload format: UTF-8 Tab Separated Values (.tsv).
+   Legacy .txt (correctly tab-delimited) is still accepted for
+   backward compat. CSV is NOT accepted — Excel's CSV export
+   uses commas, which the parser cannot interpret correctly.
    Max: 100,000 rows / 10 MB per file.
 
    To prepare a file:
-     1. Download the template
+     1. Download the CSV template
      2. Fill it in Excel or Google Sheets
-     3. File → Save As → "Text (Tab delimited) (*.txt)"
-        or export as UTF-8 tab-separated values
-     4. Upload the .txt file here
+     3. File → Save As → "Tab Separated Values (*.tsv)"
+     4. Upload the .tsv file here
    ============================================================ */
 
 const Uploads = (() => {
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+  const ACCEPTED_EXT  = /\.(tsv|txt)$/i;  // .tsv canonical; .txt legacy alias
 
   // Stores error arrays keyed by a temporary ID so onclick handlers
   // don't need to inline potentially huge JSON blobs in HTML attributes.
