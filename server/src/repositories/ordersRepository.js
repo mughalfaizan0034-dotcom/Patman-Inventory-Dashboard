@@ -1,4 +1,5 @@
 import { TABLES } from '../config/tables.js';
+import { effectiveSkuSql } from '../utils/skuPatterns.js';
 
 // Canonical shipped_from_box is bare digits (e.g. "20"). Legacy rows may hold
 // "ARA20" or even "ARA20-part-upc" — strip both back to "20" before returning
@@ -43,16 +44,26 @@ export function createOrdersRepository({ bq, projectId }) {
     const col = ALLOWED_SORT.includes(sortBy) ? `o.${sortBy}` : 'o.order_date';
     const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
+    // "Unknown" = effective_sku (with shipped_from_box override applied)
+    // does NOT exist in inventory. mapped_inventory_sku rescues a few rows.
+    // This MUST match the dashboard's Unknown UNITS calculation so totals
+    // line up between the Orders page filter and the dashboard KPI.
     const dataQuery = `
       WITH inv_skus AS (
         SELECT DISTINCT sku FROM ${invTable} WHERE organization_id = @organizationId
+      ),
+      o_eff AS (
+        SELECT
+          o.*,
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box' })} AS effective_sku
+        FROM ${table} o
       )
       SELECT
         o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
         (inv.sku IS NULL)                    AS is_unknown
-      FROM ${table} o
-      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.sku) = inv.sku
+      FROM o_eff o
+      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.effective_sku) = inv.sku
       WHERE ${baseWhere} ${statusCond}
       ORDER BY ${col} ${dir}, o.created_at DESC
       LIMIT ${pageSize} OFFSET ${offset}
@@ -61,10 +72,16 @@ export function createOrdersRepository({ bq, projectId }) {
     const countQuery = `
       WITH inv_skus AS (
         SELECT DISTINCT sku FROM ${invTable} WHERE organization_id = @organizationId
+      ),
+      o_eff AS (
+        SELECT
+          o.*,
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box' })} AS effective_sku
+        FROM ${table} o
       )
       SELECT COUNT(*) AS total
-      FROM ${table} o
-      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.sku) = inv.sku
+      FROM o_eff o
+      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.effective_sku) = inv.sku
       WHERE ${baseWhere} ${statusCond}
     `;
 
@@ -102,13 +119,19 @@ export function createOrdersRepository({ bq, projectId }) {
     const query = `
       WITH inv_skus AS (
         SELECT DISTINCT sku FROM ${invTable} WHERE organization_id = @organizationId
+      ),
+      o_eff AS (
+        SELECT
+          o.*,
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box' })} AS effective_sku
+        FROM ${table} o
       )
       SELECT
         o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
         (inv.sku IS NULL)                    AS is_unknown
-      FROM ${table} o
-      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.sku) = inv.sku
+      FROM o_eff o
+      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.effective_sku) = inv.sku
       WHERE ${baseWhere} ${statusCond}
       ORDER BY ${col} ${dir}, o.created_at DESC
     `;
