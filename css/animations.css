@@ -121,6 +121,20 @@
 }
 .guide-pulse { animation: guidePulse 3s ease-in-out infinite; }
 
+/* Topbar refresh button — icon spins while the click handler runs. The
+   class is added on click and removed when the refresh promise resolves
+   (or after a min-duration so very fast refreshes still show feedback). */
+#topbar-refresh-btn .icon {
+  transition: transform var(--dur) var(--ease);
+}
+#topbar-refresh-btn.is-spinning .icon {
+  animation: spin .8s linear infinite;
+}
+#topbar-refresh-btn.is-spinning {
+  cursor: progress;
+  opacity: .85;
+}
+
 /* Inline box selector expand */
 @keyframes expandDown {
   from { opacity: 0; transform: translateY(-6px); }

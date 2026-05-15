@@ -1205,7 +1205,27 @@ const App = (() => {
     });
 
     const refreshBtn = document.getElementById('topbar-refresh-btn');
-    if (refreshBtn) refreshBtn.addEventListener('click', () => { if (_currentPage) PAGES[_currentPage]?.init?.(); });
+    if (refreshBtn) refreshBtn.addEventListener('click', async () => {
+      // Blow away the canonical metrics cache so every page (dashboard,
+      // inventory, orders, box lookup) re-fetches fresh from the backend.
+      // Without this the topbar refresh only re-ran page init handlers
+      // while still serving the stale MetricsEngine snapshot.
+      if (refreshBtn.classList.contains('is-spinning')) return; // ignore re-entrancy
+      refreshBtn.classList.add('is-spinning');
+      refreshBtn.disabled = true;
+
+      // Min-duration so very fast loads still show the spin (visual feedback).
+      const minDuration = new Promise(resolve => setTimeout(resolve, 600));
+
+      try { MetricsEngine?.invalidate?.(); } catch {}
+      const refresh = _currentPage ? Promise.resolve(PAGES[_currentPage]?.load?.()) : Promise.resolve();
+
+      try { await Promise.all([refresh, minDuration]); }
+      finally {
+        refreshBtn.classList.remove('is-spinning');
+        refreshBtn.disabled = false;
+      }
+    });
 
     _initSidebarToggle();
   }
