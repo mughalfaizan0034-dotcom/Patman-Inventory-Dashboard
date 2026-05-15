@@ -35,10 +35,16 @@ import { effectiveSkuSql } from '../utils/skuPatterns.js';
  *
  *   total_units = SUM(sku_qty)
  *   remaining   = SUM(sku_real_remaining)          per-SKU real remaining
+ *                                                  = SUM(GREATEST(sum_qty − ordered, 0))
  *   phantom     = SUM(sku_phantom_perrow)          per-row phantom summed
- *   fulfilled   = unitsSoldRaw − phantom − unknown (derived in JS, NOT
- *                 the per-row LEAST sum — that overcounts when an SKU
- *                 spans multiple rows)
+ *   fulfilled   = unitsSoldRaw − phantom − unknown (derived in JS — the
+ *                                                  per-row LEAST sum
+ *                                                  over-counts when an
+ *                                                  SKU spans multiple
+ *                                                  inventory rows)
+ *
+ * Identity that holds across the orders side of the dashboard:
+ *   Units Sold = Fulfilled + Phantom + Unknown
  */
 export function createInventoryMetricsService({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -98,18 +104,24 @@ export function createInventoryMetricsService({ bq, projectId }) {
 
     const summaryQuery = `
       WITH ${_ordersAggCTE()},
-      ${_perRowCTE()}
+      ${_perRowCTE()},
+      ${_perSkuCTE()}
       SELECT
-        COUNT(*)                              AS total_rows,
-        SUM(initial_qty)                      AS total_inventory_units,
-        SUM(remaining)                        AS physical_remaining_units,
-        SUM(fulfilled)                        AS fulfilled_units,
-        SUM(phantom)                          AS phantom_units,
-        COUNTIF(remaining > 0)                AS in_stock_rows,
-        COUNTIF(remaining = 0)                AS oos_rows,
-        COUNTIF(phantom > 0)                  AS phantom_rows,
+        COUNT(*)                              AS total_skus,
+        SUM(sku_qty)                          AS total_inventory_units,
+        -- Per-SKU REAL remaining (= max(sum_qty − ordered, 0) per SKU).
+        SUM(sku_real_remaining)               AS physical_remaining_units,
+        -- Per-row phantom summed: matches the inventory list export's
+        -- "Phantom Units" column sum (over-counts when SKU spans rows,
+        -- but this is the value the user's pivot tables expect).
+        SUM(sku_phantom_perrow)               AS phantom_units,
+        -- SKU classification using the per-row remaining sum: a SKU is
+        -- in-stock if any of its rows still has remaining stock.
+        COUNTIF(sku_remaining_perrow > 0)     AS in_stock_skus,
+        COUNTIF(sku_remaining_perrow = 0)     AS oos_skus,
+        COUNTIF(sku_phantom_perrow > 0)       AS phantom_skus,
         COUNTIF(is_undefined)                 AS undefined_inventory_rows
-      FROM per_row
+      FROM per_sku
     `;
 
     // unknown_units = SUM(quantity_sold) for orders whose effective SKU is
@@ -157,37 +169,39 @@ export function createInventoryMetricsService({ bq, projectId }) {
       ]);
 
       const unitsSoldRaw           = Number(ordRow.units_sold_raw          ?? 0);
-      const fulfilledUnits         = Number(invRow.fulfilled_units         ?? 0);
       const phantomUnits           = Number(invRow.phantom_units           ?? 0);
       const physicalRemainingUnits = Number(invRow.physical_remaining_units ?? 0);
-      // Unknown UNITS come straight from SQL — orders whose resolved SKU
-      // doesn't exist in inventory. Not derived from `unitsSoldRaw - fulfilled
-      // - phantom` because per-row math can over-count when an SKU appears
-      // in multiple inventory rows.
       const unknownUnitsSold       = Number(ordRow.unknown_units_sold      ?? 0);
-      const actualUnitsSold        = fulfilledUnits;
+
+      // "Fulfilled" = units that actually deducted from physical inventory.
+      // Derived in JS to preserve the user's pivot table identity:
+      //
+      //     Units Sold = Fulfilled + Phantom + Unknown
+      //
+      // We can't use SUM(per-row fulfilled) from SQL — that over-counts the
+      // moment an SKU lives in multiple inventory rows.
+      const fulfilledUnits  = Math.max(unitsSoldRaw - phantomUnits - unknownUnitsSold, 0);
+      const actualUnitsSold = fulfilledUnits;
 
       return {
-        // Inventory KPIs — per-ROW counts (mirror of Inventory List page)
-        totalSkus:              Number(invRow.total_rows                ?? 0),
-        totalUnits:             Number(invRow.total_inventory_units     ?? 0),
+        // Inventory KPIs — per-SKU classification + per-row-summed unit totals
+        totalSkus:              Number(invRow.total_skus               ?? 0),
+        totalUnits:             Number(invRow.total_inventory_units    ?? 0),
         actualUnitsSold,
         fulfilledUnits,
         physicalRemainingUnits,
         phantomUnits,
-        inStockSkus:            Number(invRow.in_stock_rows             ?? 0),
-        // OOS includes phantom rows (remaining = 0 regardless of phantom),
-        // matching the Inventory List's "OOS" classification.
-        oosSkus:                Number(invRow.oos_rows                  ?? 0),
-        phantomSkus:            Number(invRow.phantom_rows              ?? 0),
-        undefinedSkus:          Number(invRow.undefined_inventory_rows  ?? 0),
+        inStockSkus:            Number(invRow.in_stock_skus            ?? 0),
+        oosSkus:                Number(invRow.oos_skus                 ?? 0),
+        phantomSkus:            Number(invRow.phantom_skus             ?? 0),
+        undefinedSkus:          Number(invRow.undefined_inventory_rows ?? 0),
         // Sales KPIs
         unitsSold:              unitsSoldRaw,
         unknownUnitsSold,
-        totalOrders:            Number(ordRow.total_orders              ?? 0),
-        activePlatforms:        Number(ordRow.active_platforms          ?? 0),
-        ignoredOrders:          Number(ordRow.ignored_orders            ?? 0),
-        undefinedSkuCount:      Number(ordRow.undefined_sku_count       ?? 0),
+        totalOrders:            Number(ordRow.total_orders             ?? 0),
+        activePlatforms:        Number(ordRow.active_platforms         ?? 0),
+        ignoredOrders:          Number(ordRow.ignored_orders           ?? 0),
+        undefinedSkuCount:      Number(ordRow.undefined_sku_count      ?? 0),
         // Aliases used by existing frontend field references
         remainingStock:         physicalRemainingUnits,
       };
