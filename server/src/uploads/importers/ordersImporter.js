@@ -3,7 +3,9 @@ import { ordersSchema } from '../schemas/ordersSchema.js';
 export const ordersImporter = {
   type:     'orders',
   schema:   ordersSchema,
-  keyField: 'order_id',
+  // Surface "uid" in validation error messages — that is the column users
+  // type into for Update / Remove (the row's internal order_row_id).
+  keyField: 'uid',
 
   getKey(row) {
     return row.order_row_id;

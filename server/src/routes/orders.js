@@ -5,11 +5,23 @@ const positiveInt = z.coerce.number().int().positive();
 
 const STATUS_VALUES = z.enum(['all', 'normal', 'unknown']).optional().default('all');
 
+// Canonical shipped_from_box is bare digits (e.g. "20"). Defensive in case a
+// row already in BigQuery from before the normalization fix holds "ARA20" or
+// "ARA20-part-upc" — strip back to digits before constructing effective SKU.
+const _digitsOnly = (boxRaw) => {
+  if (boxRaw == null) return '';
+  const s = String(boxRaw).trim();
+  if (!s) return '';
+  const m = s.match(/^ARA(\d+)(?:-.*)?$/i);
+  return m ? m[1] : s;
+};
+
 const effectiveShippedSku = (sku, shippedFromBox) => {
   if (!sku) return '';
   const m = sku.match(/^ARA(\d+)(-.+)$/);
   if (!m) return sku;
-  return shippedFromBox ? `ARA${shippedFromBox}${m[2]}` : sku;
+  const box = _digitsOnly(shippedFromBox);
+  return box ? `ARA${box}${m[2]}` : sku;
 };
 
 const ordersExportSchema = z.object({
@@ -142,7 +154,8 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
     const { original_sku, ...rowUpdates } = parsed.data;
     const updates = {
       ...rowUpdates,
-      shipped_from_box: rowUpdates.shipped_from_box || null,
+      // Canonicalize to bare digits — see _digitsOnly comment above.
+      shipped_from_box: _digitsOnly(rowUpdates.shipped_from_box) || null,
     };
     try {
       await ordersService.updateRow(request.user.organization_id, rowId, updates);

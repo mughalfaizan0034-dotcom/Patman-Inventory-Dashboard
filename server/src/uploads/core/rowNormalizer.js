@@ -2,6 +2,30 @@ export function safeString(value) {
   return String(value ?? '').trim();
 }
 
+// Box number canonicalization.
+//
+// The canonical storage form for inventory.box_number AND orders.shipped_from_box
+// is the bare digits (e.g. "20"). Downstream SQL prefixes "ARA" when constructing
+// effective SKUs:
+//     CONCAT('ARA', shipped_from_box, '-', part_number, '-', upc)
+//
+// Users sometimes paste the full SKU ("ARA20-4060915-037256018282") or the
+// "ARA20" prefix form into this column. Without normalization that produces
+// "ARAARA20-..." (the bug observed in production). Extract the bare digits.
+//
+// Accepted inputs:
+//   "20"                                  → "20"
+//   "ARA20"                               → "20"
+//   "ARA20-4060915-037256018282"          → "20"
+//   "BX-001" / "20-A" / arbitrary text    → preserved (returned as-is)
+//   ""                                    → ""
+export function normalizeBoxNumber(value) {
+  const str = safeString(value);
+  if (!str) return '';
+  const m = str.match(/^ARA(\d+)(?:-.*)?$/i);
+  return m ? m[1] : str;
+}
+
 export function parsePositiveInt(raw, field, rowNum) {
   const trimmed = String(raw ?? '').trim();
   if (!trimmed) return { error: { row: rowNum, field, value: raw, reason: `${field} is required` } };

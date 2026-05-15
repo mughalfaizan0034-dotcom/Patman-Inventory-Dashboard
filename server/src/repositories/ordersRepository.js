@@ -1,5 +1,15 @@
 import { TABLES } from '../config/tables.js';
 
+// Canonical shipped_from_box is bare digits (e.g. "20"). Legacy rows may hold
+// "ARA20" or even "ARA20-part-upc" — strip both back to "20" before returning
+// so downstream consumers (Orders table, exports, popovers) all see one form.
+function _bareBox(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  const m = s.match(/^ARA(\d+)(?:-.*)?$/i);
+  return m ? m[1] : s;
+}
+
 export function createOrdersRepository({ bq, projectId }) {
   const table    = `\`${projectId}.${TABLES.ORDERS}\``;
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -64,7 +74,11 @@ export function createOrdersRepository({ bq, projectId }) {
     ]);
 
     return {
-      items: rows[0].map(r => ({ ...r, created_at: r.created_at?.value ?? r.created_at ?? null })),
+      items: rows[0].map(r => ({
+        ...r,
+        shipped_from_box: _bareBox(r.shipped_from_box),
+        created_at:       r.created_at?.value ?? r.created_at ?? null,
+      })),
       total: Number(countRows[0][0]?.total ?? 0),
     };
   }
@@ -100,7 +114,11 @@ export function createOrdersRepository({ bq, projectId }) {
     `;
 
     const [rows] = await bq.query({ query, params });
-    return rows.map(r => ({ ...r, created_at: r.created_at?.value ?? r.created_at ?? null }));
+    return rows.map(r => ({
+      ...r,
+      shipped_from_box: _bareBox(r.shipped_from_box),
+      created_at:       r.created_at?.value ?? r.created_at ?? null,
+    }));
   }
 
   async function getPlatforms(organizationId) {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { safeString, parsePositiveInt, normalizeDate } from '../core/rowNormalizer.js';
+import { safeString, parsePositiveInt, normalizeDate, normalizeBoxNumber } from '../core/rowNormalizer.js';
 
 const VALID_ACTIONS = new Set(['Add', 'Update', 'Remove']);
 
@@ -28,7 +28,7 @@ export const inventorySchema = {
       if (raw.sku?.trim())         row.sku         = safeString(raw.sku);
       if (raw.upc?.trim())         row.upc         = safeString(raw.upc);
       if (raw.part_number?.trim()) row.part_number  = safeString(raw.part_number);
-      if (raw.box_number?.trim())  row.box_number   = safeString(raw.box_number);
+      if (raw.box_number?.trim())  row.box_number   = normalizeBoxNumber(raw.box_number);
       if (raw.date_added?.trim())  row.date_added   = normalizeDate(raw.date_added);
       if (raw.notes !== undefined && raw.notes !== '') row.notes = safeString(raw.notes) || null;
 
@@ -69,7 +69,7 @@ export const inventorySchema = {
         sku:         safeString(raw.sku),
         upc:         safeString(raw.upc),
         part_number: safeString(raw.part_number),
-        box_number:  safeString(raw.box_number),
+        box_number:  normalizeBoxNumber(raw.box_number),
         quantity:    qty.value,
         date_added:  normalizeDate(raw.date_added),
         notes:       safeString(raw.notes) || null,

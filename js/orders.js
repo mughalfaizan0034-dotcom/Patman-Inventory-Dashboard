@@ -20,11 +20,22 @@ const Orders = (() => {
     return { box: m[1], partNumber: m[2], upc: m[3] };
   }
 
+  // shipped_from_box may arrive as "20", "ARA20", or even "ARA20-part-upc"
+  // when older rows predate the upload normalizer. Strip down to bare digits
+  // so we never render "ARAARA20-..." again.
+  function _bareBox(v) {
+    if (v == null) return '';
+    const s = String(v).trim();
+    if (!s) return '';
+    const m = s.match(/^ARA(\d+)(?:-.*)?$/i);
+    return m ? m[1] : s;
+  }
+
   function _getEffectiveSku(sku, shippedFromBox) {
     if (!sku) return '';
     const parsed = _parseSku(sku);
     if (!parsed) return sku;
-    const box = shippedFromBox || parsed.box;
+    const box = _bareBox(shippedFromBox) || parsed.box;
     return `ARA${box}-${parsed.partNumber}-${parsed.upc}`;
   }
 

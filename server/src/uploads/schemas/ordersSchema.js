@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { safeString, parsePositiveInt, normalizeDate } from '../core/rowNormalizer.js';
+import { safeString, parsePositiveInt, normalizeDate, normalizeBoxNumber } from '../core/rowNormalizer.js';
 
 const VALID_ACTIONS = new Set(['Add', 'Update', 'Remove']);
 
@@ -16,6 +16,11 @@ export const ordersSchema = {
     if (!VALID_ACTIONS.has(action)) {
       return { error: { row: lineNum, field: 'action', reason: `action must be Add, Update, or Remove (got "${action}")` } };
     }
+
+    // Accept `shipped_sku` as the user-friendly header alongside the legacy
+    // `shipped_from_box`. Both are normalized to the bare box-number form
+    // before storage. If both are present, the new header wins.
+    const shippedRaw = (raw.shipped_sku?.trim?.() ? raw.shipped_sku : raw.shipped_from_box) ?? '';
 
     // `uid` is the INTERNAL row tracker (order_row_id) for Update/Remove.
     // `order_id` is the EXTERNAL marketplace order number (required on Add).
@@ -45,7 +50,12 @@ export const ordersSchema = {
       }
       if (raw.sku?.trim())      row.sku      = safeString(raw.sku);
       if (raw.platform?.trim()) row.platform = safeString(raw.platform);
-      if (raw.shipped_from_box !== undefined) row.shipped_from_box = safeString(raw.shipped_from_box) || null;
+      // Only touch shipped_from_box when the user actually filled the cell.
+      // Blank cells on Update must NOT wipe an existing override — the TSV
+      // parser always sets undefined columns to '' so we must compare to ''.
+      if (shippedRaw && shippedRaw.trim()) {
+        row.shipped_from_box = normalizeBoxNumber(shippedRaw);
+      }
 
       if (raw.quantity_sold !== undefined && raw.quantity_sold !== '') {
         const qty = parsePositiveInt(raw.quantity_sold, 'quantity_sold', lineNum);
@@ -91,7 +101,7 @@ export const ordersSchema = {
         sku:              safeString(raw.sku),
         quantity_sold:    qty.value,
         platform:         safeString(raw.platform),
-        shipped_from_box: safeString(raw.shipped_from_box) || null,
+        shipped_from_box: normalizeBoxNumber(shippedRaw) || null,
         created_at:       new Date().toISOString(),
       },
     };

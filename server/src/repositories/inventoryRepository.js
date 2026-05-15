@@ -1,5 +1,6 @@
 import { TABLES } from '../config/tables.js';
 import { isUndefinedRowSql } from '../utils/inventoryPatterns.js';
+import { effectiveSkuSql } from '../utils/skuPatterns.js';
 
 export function createInventoryRepository({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -49,13 +50,7 @@ export function createInventoryRepository({ bq, projectId }) {
     const cte = `
       WITH ord_summary AS (
         SELECT
-          CASE
-            WHEN shipped_from_box IS NOT NULL
-                 AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-                 AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-            THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)), REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-            ELSE sku
-          END AS effective_sku,
+          ${effectiveSkuSql()} AS effective_sku,
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
@@ -158,13 +153,7 @@ export function createInventoryRepository({ bq, projectId }) {
       ),
       ord_summary AS (
         SELECT
-          CASE
-            WHEN shipped_from_box IS NOT NULL
-                 AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-                 AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-            THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)), REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-            ELSE sku
-          END AS effective_sku,
+          ${effectiveSkuSql()} AS effective_sku,
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId
@@ -191,11 +180,23 @@ export function createInventoryRepository({ bq, projectId }) {
       params: { organizationId, partNumber, upc },
     });
 
-    const all = rows.map(r => ({
-      box_number:      r.box_number,
-      effective_sku:   `ARA${r.box_number}-${partNumber}-${upc}`,
-      remaining_stock: Number(r.remaining_stock ?? 0),
-    }));
+    // Some older inventory rows may have box_number stored as "ARA20" or even
+    // a full SKU "ARA20-part-upc" due to past user-entry errors. Canonicalize
+    // to bare digits before exposing to the frontend popover, otherwise
+    // selecting the box would store the bad form into shipped_from_box.
+    const _bareBox = (v) => {
+      const s = String(v ?? '').trim();
+      const m = s.match(/^ARA(\d+)(?:-.*)?$/i);
+      return m ? m[1] : s;
+    };
+    const all = rows.map(r => {
+      const box = _bareBox(r.box_number);
+      return {
+        box_number:      box,
+        effective_sku:   `ARA${box}-${partNumber}-${upc}`,
+        remaining_stock: Number(r.remaining_stock ?? 0),
+      };
+    });
 
     return {
       originalBox,
@@ -245,13 +246,7 @@ export function createInventoryRepository({ bq, projectId }) {
     const cte = `
       WITH ord_summary AS (
         SELECT
-          CASE
-            WHEN shipped_from_box IS NOT NULL
-                 AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-                 AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-            THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)), REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-            ELSE sku
-          END AS effective_sku,
+          ${effectiveSkuSql()} AS effective_sku,
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId

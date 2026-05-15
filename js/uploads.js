@@ -340,9 +340,13 @@ const Uploads = (() => {
   //   • uid: leave blank on Add (auto-assigned). Required on Update / Remove.
   //
   // ORDERS columns (8):
-  //   action, uid, order_id, order_date, sku, quantity_sold, platform, shipped_from_box
+  //   action, uid, order_id, order_date, sku, quantity_sold, platform, shipped_sku
   //   • uid: INTERNAL row tracker. Blank on Add. Required on Update / Remove.
   //   • order_id: EXTERNAL marketplace order number. Required on Add.
+  //   • shipped_sku: fulfillment override. Accepts a bare box number ("20"),
+  //     an ARA-prefixed box ("ARA20"), or the full reassigned SKU
+  //     ("ARA20-4060915-037256018282") — the server normalizes all three to
+  //     a bare box. Header `shipped_from_box` is still accepted (alias).
   const _templates = {
     inventory: {
       filename: 'inventory_template.csv',
@@ -357,8 +361,8 @@ const Uploads = (() => {
     orders: {
       filename: 'orders_template.csv',
       content: [
-        // 8 columns: action, uid, order_id, order_date, sku, quantity_sold, platform, shipped_from_box
-        'action,uid,order_id,order_date,sku,quantity_sold,platform,shipped_from_box',
+        // 8 columns: action, uid, order_id, order_date, sku, quantity_sold, platform, shipped_sku
+        'action,uid,order_id,order_date,sku,quantity_sold,platform,shipped_sku',
         'Add,,111-2222222-3333333,2026-05-11,SKU-001,2,Amazon,BX-001',
         'Add,,EBAY-9876543210,2026-05-11,SKU-002,1,eBay,',
         // Update qty_sold to 3, leave all other fields unchanged:

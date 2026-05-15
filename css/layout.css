@@ -486,6 +486,20 @@ body.sidebar-collapsed .sidebar-logout      { display: none; }
   overflow: visible;
 }
 
+/* Upload History card — pin the filter-bar (title + type filter + refresh)
+   to the top of .uploads-history scroll container so it stays visible
+   while the user scrolls through long history. The data-table <thead>
+   sticks immediately beneath it. */
+.uploads-history .card-table > .filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface-2);
+}
+.uploads-history .data-table thead th {
+  top: 53px;
+}
+
 /* ── Section header ─────────────────────────────────────────── */
 .section-header {
   display: flex;

@@ -1,4 +1,5 @@
 import { TABLES } from '../config/tables.js';
+import { effectiveSkuSql } from '../utils/skuPatterns.js';
 
 export function createLookupRepository({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -45,13 +46,7 @@ export function createLookupRepository({ bq, projectId }) {
       ),
       ord_summary AS (
         SELECT
-          CASE
-            WHEN shipped_from_box IS NOT NULL
-                 AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-                 AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-            THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)), REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-            ELSE sku
-          END AS effective_sku,
+          ${effectiveSkuSql()} AS effective_sku,
           SUM(quantity_sold) AS units_sold
         FROM ${ordTable}
         WHERE organization_id = @organizationId

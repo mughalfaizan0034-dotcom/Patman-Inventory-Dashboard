@@ -3,7 +3,9 @@ import { inventorySchema } from '../schemas/inventorySchema.js';
 export const inventoryImporter = {
   type:     'inventory',
   schema:   inventorySchema,
-  keyField: 'row_uid',
+  // Surface "uid" in validation error messages — that is the column users
+  // type into for Update / Remove (the row's internal row_uid).
+  keyField: 'uid',
 
   getKey(row) {
     return row.row_uid;

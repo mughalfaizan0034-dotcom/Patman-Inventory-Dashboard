@@ -1,5 +1,6 @@
 import { TABLES } from '../config/tables.js';
 import { isUndefinedSql, isUndefinedRowSql } from '../utils/inventoryPatterns.js';
+import { effectiveSkuSql } from '../utils/skuPatterns.js';
 
 /**
  * inventoryMetricsService — single source of truth for all inventory calculations.
@@ -23,14 +24,7 @@ export function createInventoryMetricsService({ bq, projectId }) {
   const _ordersAggCTE = () => `
     orders_agg AS (
       SELECT
-        CASE
-          WHEN shipped_from_box IS NOT NULL
-               AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-               AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-          THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)),
-                      REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-          ELSE sku
-        END AS effective_sku,
+        ${effectiveSkuSql()} AS effective_sku,
         SUM(quantity_sold) AS ordered
       FROM ${ordTable}
       WHERE organization_id = @organizationId
@@ -105,14 +99,7 @@ export function createInventoryMetricsService({ bq, projectId }) {
           SELECT COUNT(DISTINCT o2.effective_sku)
           FROM (
             SELECT
-              CASE
-                WHEN shipped_from_box IS NOT NULL
-                     AND TRIM(CAST(shipped_from_box AS STRING)) != ''
-                     AND REGEXP_CONTAINS(sku, r'^ARA[0-9]+-.+$')
-                THEN CONCAT('ARA', TRIM(CAST(shipped_from_box AS STRING)),
-                            REGEXP_EXTRACT(sku, r'^ARA[0-9]+(.+)$'))
-                ELSE sku
-              END AS effective_sku,
+              ${effectiveSkuSql()} AS effective_sku,
               mapped_inventory_sku
             FROM ${ordTable}
             WHERE organization_id = @organizationId
