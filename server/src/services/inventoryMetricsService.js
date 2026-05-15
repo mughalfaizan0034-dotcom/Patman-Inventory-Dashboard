@@ -3,27 +3,42 @@ import { isUndefinedSql, isUndefinedRowSql } from '../utils/inventoryPatterns.js
 import { effectiveSkuSql } from '../utils/skuPatterns.js';
 
 /**
- * inventoryMetricsService — single source of truth for all dashboard KPI math.
+ * inventoryMetricsService — single source of truth for dashboard KPI math.
  *
- * MUST match the per-row math used by the Inventory List page (otherwise the
- * dashboard tells a different story than the page users export from). The
- * Inventory List query in inventoryRepository.findAll is the canonical
- * reference — it joins each inventory ROW to that SKU's aggregated order
- * count, then computes:
+ * The reference is the user's exported inventory report aggregated by SKU.
+ * Inventory rows share a SKU when the same product lives in multiple boxes,
+ * and the dashboard must classify by SKU (not by row) so the counts match
+ * what users see when they pivot the export in Excel / Google Sheets.
  *
- *   per-row fulfilled = LEAST(ordered_for_sku, row.quantity)
- *   per-row phantom   = GREATEST(ordered_for_sku - row.quantity, 0)
- *   per-row remaining = GREATEST(row.quantity - ordered_for_sku, 0)
+ * For each inventory ROW we compute the standard per-row math (the same
+ * formulas the Inventory List page renders into each row's cells):
  *
- * KPI counts use ROW counts (not distinct-SKU counts) so totals add up the
- * way the user sees them in the Inventory List:
- *   total       = COUNT(*) of inventory rows
- *   in_stock    = COUNTIF(remaining > 0)
- *   oos         = COUNTIF(remaining = 0)         ← phantom rows are a SUBSET of OOS
- *   phantom_rows = COUNTIF(phantom > 0)
+ *   row_fulfilled = LEAST(ordered_for_sku, row.quantity)
+ *   row_phantom   = GREATEST(ordered_for_sku - row.quantity, 0)
+ *   row_remaining = GREATEST(row.quantity - ordered_for_sku, 0)
  *
- *   in_stock + oos = total   (mutually exclusive by sign of remaining)
- *   phantom_rows ⊆ oos       (phantom always implies remaining=0)
+ * Then we aggregate to SKU:
+ *
+ *   sku_qty                = SUM(row.quantity)
+ *   sku_phantom_perrow     = SUM(row_phantom)      ← user's "Phantom units"
+ *   sku_remaining_perrow   = SUM(row_remaining)    ← used for SKU classification
+ *   sku_real_remaining     = GREATEST(sku_qty - ordered_for_sku, 0)
+ *                                                  ← user's "Remaining units"
+ *                                                    (one ordered_for_sku per SKU)
+ *
+ * KPI totals (used by the dashboard):
+ *
+ *   total_skus  = COUNT(*) over per_sku            (distinct SKUs)
+ *   in_stock    = COUNTIF(sku_remaining_perrow > 0)   per-SKU classification
+ *   oos         = COUNTIF(sku_remaining_perrow = 0)   per-SKU classification
+ *   phantom_sk  = COUNTIF(sku_phantom_perrow > 0)
+ *
+ *   total_units = SUM(sku_qty)
+ *   remaining   = SUM(sku_real_remaining)          per-SKU real remaining
+ *   phantom     = SUM(sku_phantom_perrow)          per-row phantom summed
+ *   fulfilled   = unitsSoldRaw − phantom − unknown (derived in JS, NOT
+ *                 the per-row LEAST sum — that overcounts when an SKU
+ *                 spans multiple rows)
  */
 export function createInventoryMetricsService({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -40,23 +55,39 @@ export function createInventoryMetricsService({ bq, projectId }) {
       GROUP BY effective_sku
     )`;
 
-  // ── Per-ROW stock math (mirror of inventoryRepository.findAll) ────────────
-  // One row per inventory row. orders_agg supplies the SKU-level ordered
-  // count, which is then capped against this row's quantity.
+  // Per-row stock math (mirror of inventoryRepository.findAll) — one row per
+  // inventory record. The same value of ordered_for_sku is broadcast across
+  // every row of a given SKU because the LEFT JOIN matches on i.sku.
   const _perRowCTE = () => `
     per_row AS (
       SELECT
         i.row_uid,
         i.sku,
-        i.quantity                                              AS initial_qty,
-        COALESCE(o.ordered, 0)                                  AS ordered,
-        LEAST(COALESCE(o.ordered, 0), i.quantity)               AS fulfilled,
-        GREATEST(COALESCE(o.ordered, 0) - i.quantity, 0)        AS phantom,
-        GREATEST(i.quantity - COALESCE(o.ordered, 0), 0)        AS remaining,
+        i.quantity                                              AS quantity,
+        COALESCE(o.ordered, 0)                                  AS ordered_for_sku,
+        LEAST(COALESCE(o.ordered, 0), i.quantity)               AS row_fulfilled,
+        GREATEST(COALESCE(o.ordered, 0) - i.quantity, 0)        AS row_phantom,
+        GREATEST(i.quantity - COALESCE(o.ordered, 0), 0)        AS row_remaining,
         ${isUndefinedRowSql('i')}                               AS is_undefined
       FROM ${invTable} i
       LEFT JOIN orders_agg o ON i.sku = o.effective_sku
       WHERE i.organization_id = @organizationId
+    )`;
+
+  // Per-SKU rollup of the per-row math.
+  const _perSkuCTE = () => `
+    per_sku AS (
+      SELECT
+        sku,
+        SUM(quantity)                                              AS sku_qty,
+        MAX(ordered_for_sku)                                       AS ordered_for_sku,
+        SUM(row_fulfilled)                                         AS sku_fulfilled_perrow,
+        SUM(row_phantom)                                           AS sku_phantom_perrow,
+        SUM(row_remaining)                                         AS sku_remaining_perrow,
+        GREATEST(SUM(quantity) - MAX(ordered_for_sku), 0)          AS sku_real_remaining,
+        LOGICAL_OR(is_undefined)                                   AS is_undefined
+      FROM per_row
+      GROUP BY sku
     )`;
 
   // ─────────────────────────────────────────────────────────────────────────
