@@ -4,7 +4,19 @@
 
 const Dashboard = (() => {
 
-  /* ── KPI card field map ──────────────────────────────────── */
+  /* ── KPI card field map ──────────────────────────────────────
+     The Total Units card displays  Total / Sold / Remaining  and the
+     identity must hold:
+         Total = Sold + Remaining
+     "Sold" therefore maps to actualUnitsSold (= fulfilledUnits, the units
+     that actually came out of stock). It does NOT map to the raw
+     SUM(quantity_sold), which includes orders for SKUs not present in
+     inventory — those never deducted, so subtracting them would break
+     the equation.
+
+     The Total Orders card displays the full breakdown:
+         Units Sold (raw) = Fulfilled + Phantom + Unknown
+     so each sub-value uses its own field. */
   const KPI_MAP = [
     // [elementId,              dataField,                 colorClass or fn]
     ['kpi-total-skus',         'totalSkus',               null],
@@ -12,13 +24,13 @@ const Dashboard = (() => {
     ['kpi-oos-skus',           'oosSkus',                 d => d > 0 ? 'orange' : null],
     ['kpi-undef-skus',         'undefinedSkus',           d => d > 0 ? 'error'  : null],
     ['kpi-total-units',        'totalUnits',              null],
-    ['kpi-units-sold',         'unitsSold',               null],
+    ['kpi-units-sold',         'actualUnitsSold',         null],
     ['kpi-remaining',          'physicalRemainingUnits',  'green'],
     ['kpi-total-orders',       'totalOrders',             null],
     ['kpi-orders-units-sold',  'unitsSold',               null],
     ['kpi-phantom',            'phantomUnits',            d => d > 0 ? 'warn'   : null],
     ['kpi-fulfilled',          'actualUnitsSold',         'teal'],
-    ['kpi-unknown',            'undefinedSkuOrders',      d => d > 0 ? 'error'  : null],
+    ['kpi-unknown',            'unknownUnitsSold',        d => d > 0 ? 'error'  : null],
   ];
 
   /* ── Chart + filter state ────────────────────────────────── */

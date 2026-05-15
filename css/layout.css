@@ -468,36 +468,41 @@ body.sidebar-collapsed .sidebar-logout      { display: none; }
   border-bottom: 1px solid var(--border);
 }
 
+/* Upload History uses the same viewport-fit flex pattern as Inventory /
+   Orders: the card becomes a flex column, the filter-bar sits at the top
+   without scrolling, and only the table-wrap scrolls. This avoids the
+   sticky-positioning quirks (transparent rows bleeding through, etc.)
+   that previously appeared with a sticky filter-bar inside a scroll
+   container. */
 .uploads-history {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.uploads-history > .card-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.uploads-history > .card-table > .filter-bar { flex-shrink: 0; }
+.uploads-history > .card-table > .table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* Sticky table headers across scrollable page sections.
-   .table-wrap's default `overflow-x: auto` makes it a sticky-containing-block,
-   which breaks header sticking when the OUTER element is the actual scroll
-   container (the header would move with the page scroll instead of pinning).
-   Override to `overflow: visible` so the sticky header pins to the page-level
-   scroll container (.uploads-history, .tab-panel.active, .blookup-body). */
-.uploads-history .table-wrap,
+   Settings tabs + Box Lookup still use a page-level scroll container, so
+   their table-wraps need overflow:visible to let <thead> stick to the
+   outer scrollbox. Uploads now scrolls inside .table-wrap itself, so it
+   keeps the default overflow. */
 #page-settings .tab-panel .table-wrap,
 .blookup-body .table-wrap {
   overflow: visible;
-}
-
-/* Upload History card — pin the filter-bar (title + type filter + refresh)
-   to the top of .uploads-history scroll container so it stays visible
-   while the user scrolls through long history. The data-table <thead>
-   sticks immediately beneath it. */
-.uploads-history .card-table > .filter-bar {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  background: var(--surface-2);
-}
-.uploads-history .data-table thead th {
-  top: 53px;
 }
 
 /* ── Section header ─────────────────────────────────────────── */

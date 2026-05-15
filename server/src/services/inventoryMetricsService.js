@@ -68,6 +68,7 @@ export function createInventoryMetricsService({ bq, projectId }) {
         COUNT(*)                    AS total_skus,
         SUM(ps.initial_qty)         AS total_inventory_units,
         SUM(ps.remaining)           AS physical_remaining_units,
+        SUM(ps.fulfilled)           AS fulfilled_units,
         SUM(ps.phantom)             AS phantom_units,
         COUNTIF(ps.remaining > 0)   AS in_stock_skus,
         COUNTIF(ps.remaining = 0 AND ps.phantom = 0) AS oos_skus,
@@ -120,15 +121,32 @@ export function createInventoryMetricsService({ bq, projectId }) {
       ]);
 
       const unitsSoldRaw           = Number(ordRow.units_sold_raw          ?? 0);
+      const fulfilledUnits         = Number(invRow.fulfilled_units         ?? 0);
       const phantomUnits           = Number(invRow.phantom_units           ?? 0);
-      const actualUnitsSold        = unitsSoldRaw - phantomUnits;
       const physicalRemainingUnits = Number(invRow.physical_remaining_units ?? 0);
+
+      // Math invariants (per CLAUDE.md "Centralized Inventory Calculation Engine"):
+      //   unitsSoldRaw = matched_units + unknown_units
+      //   matched_units = fulfilled + phantom         (per-SKU LEAST + GREATEST)
+      //   ⇒ unknown_units = unitsSoldRaw - fulfilled - phantom
+      //
+      //   totalUnits = fulfilled + physicalRemaining   (every inventory unit is
+      //                                                 either shipped or in stock)
+      //   ⇒ physicalRemaining = totalUnits - fulfilled  ✓ matches SQL
+      //
+      // "Actual Units Sold" = units that ACTUALLY came out of stock = fulfilled.
+      // The previous formula (unitsSoldRaw - phantom) overcounted whenever
+      // orders had unknown SKUs — those units never deducted, but were still
+      // subtracted via the dashboard label "Sold", making Total - Sold ≠ Remaining.
+      const unknownUnitsSold = Math.max(unitsSoldRaw - fulfilledUnits - phantomUnits, 0);
+      const actualUnitsSold  = fulfilledUnits;
 
       return {
         // Inventory KPIs
         totalSkus:              Number(invRow.total_skus              ?? 0),
         totalUnits:             Number(invRow.total_inventory_units   ?? 0),
         actualUnitsSold,
+        fulfilledUnits,
         physicalRemainingUnits,
         phantomUnits,
         inStockSkus:            Number(invRow.in_stock_skus           ?? 0),
@@ -137,19 +155,23 @@ export function createInventoryMetricsService({ bq, projectId }) {
         undefinedSkus:          Number(invRow.undefined_inventory_rows ?? 0),
         // Sales KPIs
         unitsSold:              unitsSoldRaw,
+        unknownUnitsSold,
         totalOrders:            Number(ordRow.total_orders            ?? 0),
         activePlatforms:        Number(ordRow.active_platforms        ?? 0),
         ignoredOrders:          Number(ordRow.ignored_orders          ?? 0),
-        undefinedSkuOrders:     Number(ordRow.undefined_sku_orders    ?? 0),
+        // Distinct count of unknown effective_skus (kept for any UI that
+        // wants to surface "how many unique SKUs are unknown").
+        undefinedSkuCount:      Number(ordRow.undefined_sku_orders    ?? 0),
         // Aliases used by existing frontend field references
         remainingStock:         physicalRemainingUnits,
       };
     } catch (err) {
       console.error('[inventoryMetrics.computeSummary] failed:', err?.message ?? err);
       return {
-        totalSkus: 0, totalUnits: 0, actualUnitsSold: 0, physicalRemainingUnits: 0,
+        totalSkus: 0, totalUnits: 0, actualUnitsSold: 0, fulfilledUnits: 0, physicalRemainingUnits: 0,
         phantomUnits: 0, inStockSkus: 0, oosSkus: 0, phantomSkus: 0, undefinedSkus: 0,
-        unitsSold: 0, totalOrders: 0, activePlatforms: 0, ignoredOrders: 0, undefinedSkuOrders: 0,
+        unitsSold: 0, unknownUnitsSold: 0,
+        totalOrders: 0, activePlatforms: 0, ignoredOrders: 0, undefinedSkuCount: 0,
         remainingStock: 0,
       };
     }
