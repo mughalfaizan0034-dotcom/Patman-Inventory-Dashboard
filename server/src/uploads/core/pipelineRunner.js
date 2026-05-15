@@ -111,23 +111,47 @@ export async function runUploadPipeline({ importer, uploadsRepo, organizationId,
   }
 
   // ── Phase 4: execute ─────────────────────────────────────────────────────
+  // BigQuery's streaming buffer prevents UPDATE/DELETE on rows added via
+  // streaming insert for up to ~90 minutes. New inserts now go through DML
+  // (see uploadsRepository.insertInventoryBatch / insertOrdersBatch) so the
+  // problem is bounded to LEGACY rows from before that change. If we see
+  // the specific BQ error here, surface a clear AppError instead of a raw
+  // 500 so the user understands the cause and the wait window.
+  const _wrapBqError = (op) => async () => {
+    try { return await op(); }
+    catch (err) {
+      const msg = String(err?.message ?? '');
+      if (/streaming buffer/i.test(msg)) {
+        throw new AppError(
+          409,
+          'Some rows were added via streaming insert recently and cannot be ' +
+          'updated or removed yet. BigQuery holds them in a streaming buffer for ' +
+          'up to ~90 minutes. Wait for the buffer to flush and retry, or split ' +
+          'the file so older rows process first.',
+        );
+      }
+      throw err;
+    }
+  };
+
   let added = 0, updated = 0, removed = 0;
 
   for (let i = 0; i < validAdds.length; i += CHUNK_SIZE_ADD) {
     const chunk = validAdds.slice(i, i + CHUNK_SIZE_ADD);
-    await importer.addBatch(uploadsRepo, chunk);
+    await _wrapBqError(() => importer.addBatch(uploadsRepo, chunk))();
     added += chunk.length;
   }
 
   for (let i = 0; i < validUpdates.length; i += CHUNK_SIZE_UPDATE) {
     const chunk = validUpdates.slice(i, i + CHUNK_SIZE_UPDATE);
-    await importer.updateBatch(uploadsRepo, organizationId, chunk);
+    await _wrapBqError(() => importer.updateBatch(uploadsRepo, organizationId, chunk))();
     updated += chunk.length;
   }
 
   if (validRemoveKeys.length) {
     for (let i = 0; i < validRemoveKeys.length; i += CHUNK_SIZE_REMOVE) {
-      await importer.removeBatch(uploadsRepo, organizationId, validRemoveKeys.slice(i, i + CHUNK_SIZE_REMOVE));
+      const chunkKeys = validRemoveKeys.slice(i, i + CHUNK_SIZE_REMOVE);
+      await _wrapBqError(() => importer.removeBatch(uploadsRepo, organizationId, chunkKeys))();
     }
     removed = validRemoveKeys.length;
   }

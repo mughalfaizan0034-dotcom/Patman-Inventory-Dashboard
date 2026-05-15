@@ -99,16 +99,96 @@ export function createUploadsRepository({ bq, projectId }) {
     });
   }
 
+  // We use a DML INSERT (not streaming tabledata.insertAll) on purpose.
+  // BigQuery's streaming buffer prevents UPDATE / DELETE from touching rows
+  // for up to ~90 minutes after a streaming insert. That broke the workflow
+  // where users Add rows via feed file and then Update / Remove them the
+  // same session (the cause of the recurring "500 on orders Update/Remove
+  // feed" report). DML INSERT places rows in regular storage immediately,
+  // so the subsequent UPDATE / DELETE in the SAME upload pipeline works.
+  //
+  // DML rate limit is well within our needs: chunk size = 500 rows × ~10
+  // columns ≈ 5K params per query (under BQ's 10K parameter limit), and
+  // 100K-row uploads → 200 chunks per day per table, far under the 1,500
+  // DML statements/table/day quota.
   async function insertInventoryBatch(rows) {
     if (!rows.length) return;
-    const dataset = bq.dataset('patman_inventory');
-    await dataset.table('inventory').insert(rows);
+    const params = {
+      rows: rows.map(r => ({
+        organization_id: r.organization_id,
+        row_uid:         r.row_uid,
+        sku:             r.sku,
+        upc:             r.upc ?? null,
+        part_number:     r.part_number ?? null,
+        box_number:      r.box_number  ?? null,
+        quantity:        r.quantity,
+        date_added:      r.date_added  ?? null,
+        notes:           r.notes       ?? null,
+        updated_at:      r.updated_at  ?? new Date().toISOString(),
+      })),
+    };
+    const types = {
+      rows: [{
+        organization_id: 'STRING',
+        row_uid:         'STRING',
+        sku:             'STRING',
+        upc:             'STRING',
+        part_number:     'STRING',
+        box_number:      'STRING',
+        quantity:        'INT64',
+        date_added:      'STRING',
+        notes:           'STRING',
+        updated_at:      'STRING',
+      }],
+    };
+    const query = `
+      INSERT INTO ${invTable}
+        (organization_id, row_uid, sku, upc, part_number, box_number, quantity, date_added, notes, updated_at)
+      SELECT
+        organization_id, row_uid, sku, upc, part_number, box_number, quantity, date_added, notes,
+        TIMESTAMP(updated_at)
+      FROM UNNEST(@rows)
+    `;
+    await bq.query({ query, params, types });
   }
 
   async function insertOrdersBatch(rows) {
     if (!rows.length) return;
-    const dataset = bq.dataset('patman_inventory');
-    await dataset.table('orders').insert(rows);
+    const params = {
+      rows: rows.map(r => ({
+        order_row_id:     r.order_row_id,
+        organization_id:  r.organization_id,
+        order_id:         r.order_id,
+        order_date:       r.order_date,
+        sku:              r.sku,
+        quantity_sold:    r.quantity_sold,
+        platform:         r.platform,
+        shipped_from_box: r.shipped_from_box ?? null,
+        created_at:       r.created_at ?? new Date().toISOString(),
+      })),
+    };
+    const types = {
+      rows: [{
+        order_row_id:     'STRING',
+        organization_id:  'STRING',
+        order_id:         'STRING',
+        order_date:       'STRING',
+        sku:              'STRING',
+        quantity_sold:    'INT64',
+        platform:         'STRING',
+        shipped_from_box: 'STRING',
+        created_at:       'STRING',
+      }],
+    };
+    const query = `
+      INSERT INTO ${ordTable}
+        (order_row_id, organization_id, order_id, order_date, sku, quantity_sold, platform, shipped_from_box, created_at)
+      SELECT
+        order_row_id, organization_id, order_id, order_date, sku, quantity_sold, platform, shipped_from_box,
+        TIMESTAMP(created_at)
+      FROM UNNEST(@rows)
+    `;
+    await bq.query({ query, params, types });
   }
 
   // Returns a Set of row_uids that already exist for this org (from the given candidate list).
