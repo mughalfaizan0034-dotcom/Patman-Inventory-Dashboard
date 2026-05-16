@@ -99,7 +99,12 @@ const Dashboard = (() => {
 
   function _wireKPICards() {
     document.querySelectorAll('.kpi-card[data-navigate]').forEach(card => {
-      card.addEventListener('click', () => App.navigate(card.dataset.navigate));
+      const go = () => App.navigate(card.dataset.navigate);
+      card.addEventListener('click', go);
+      // The cards have role="button" + tabindex="0" — wire Enter/Space too.
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
     });
   }
 
