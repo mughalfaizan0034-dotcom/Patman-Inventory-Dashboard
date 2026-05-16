@@ -30,7 +30,7 @@ const BoxLookup = (() => {
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
           <span style="font-size:10.5px;font-weight:700;color:var(--txt-4);letter-spacing:.08em;text-transform:uppercase">UPC</span>
-          <span style="font-size:14px;font-weight:700;color:var(--txt-1);font-family:'Courier New',monospace;letter-spacing:.04em">${Utils.escapeHtml(upc || '—')}</span>
+          <span style="font-size:14px;font-weight:700;color:var(--txt-1);font-family:var(--font-number);font-variant-numeric:tabular-nums;letter-spacing:.04em">${Utils.escapeHtml(upc || '—')}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;border:1px solid var(--border);border-radius:8px;overflow:hidden">
           <div style="padding:12px 16px;border-right:1px solid var(--border)">
