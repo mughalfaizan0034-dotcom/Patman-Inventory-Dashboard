@@ -46,13 +46,23 @@ const Settings = (() => {
   // Friendly "Format" options shown to admins instead of raw regex fragments.
   // Each maps to a base regex character class — the segment's stored `pattern`
   // is rebuilt as `<base>+` or `<base>{min,max}` based on the Length inputs.
-  // 'custom' is the escape hatch for power users who need a literal regex.
+  // No "Custom regex" entry on purpose: regex syntax is hidden from admins by
+  // policy. Unrecognized stored patterns fall back to 'any' on edit and the
+  // engine normalizes the pattern next time the admin saves.
   const FORMAT_OPTIONS = Object.freeze([
     { value: 'numeric',      label: 'Numbers only',      base: '\\d'      },
     { value: 'letters',      label: 'Letters only',      base: '[A-Z]'    },
     { value: 'alphanumeric', label: 'Letters & numbers', base: '[A-Z0-9]' },
     { value: 'any',          label: 'Any (non-space)',   base: '[^\\s]'   },
-    { value: 'custom',       label: 'Custom regex…',     base: null       },
+  ]);
+
+  // Extra patterns that should round-trip into the 'any' format on edit (they
+  // were emitted by older defaults / by switching segment types around).
+  const ANY_PATTERN_ALIASES = new Set([
+    '[^\\s]+',
+    '[^\\s\\-_]+',
+    '.+',
+    '.*',
   ]);
 
   // Friendly placeholders shown in the template preview (e.g. "{Part Number}").
@@ -78,9 +88,13 @@ const Settings = (() => {
 
   // Round-trip helper: detect the friendly Format + Length from a stored
   // regex pattern. Lets the segment editor show the right preset when an
-  // admin re-opens an existing structure for editing.
+  // admin re-opens an existing structure for editing. Unrecognized patterns
+  // fall back to 'any' so the dropdown stays user-friendly — the underlying
+  // pattern is left alone until the admin actively edits the segment, at
+  // which point it gets rebuilt from the friendly inputs.
   function _detectFormatFromPattern(pattern) {
     if (!pattern) return { format: 'numeric', min: '', max: '' };
+    if (ANY_PATTERN_ALIASES.has(pattern)) return { format: 'any', min: '', max: '' };
     const tryMatch = (baseEscaped, format) => {
       let m;
       if ((m = pattern.match(new RegExp(`^${baseEscaped}\\+$`))))                  return { format, min: '',   max: '' };
@@ -91,12 +105,11 @@ const Settings = (() => {
     };
     for (const opt of FORMAT_OPTIONS) {
       if (!opt.base) continue;
-      // Escape the base for inclusion in a meta-regex.
       const esc = opt.base.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
       const hit = tryMatch(esc, opt.value);
       if (hit) return hit;
     }
-    return { format: 'custom', min: '', max: '' };
+    return { format: 'any', min: '', max: '' };
   }
 
   // Build a regex fragment from the friendly Format + Length inputs.
@@ -305,51 +318,46 @@ const Settings = (() => {
            data-required="${required ? '1' : '0'}"
            data-segments='${Utils.escapeHtml(JSON.stringify(segments))}'>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <label class="form-label" style="margin:0">
+          <label class="form-label" style="margin:0;font-family:var(--font-title);font-weight:700;font-size:15px;color:var(--txt-1)">
             SKU Structure ${required ? '<span class="req">*</span>' : ''}
           </label>
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-3);cursor:pointer">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-family:var(--font-body);font-size:12.5px;font-weight:500;color:var(--txt-3);cursor:pointer">
             <input type="checkbox" data-sku-enabled${useStruct.enabled !== false ? ' checked' : ''} style="accent-color:var(--primary)">
             <span>Enable validation</span>
           </label>
         </div>
-        <div class="form-hint" style="margin-bottom:8px">
-          Add segments in order. Any inventory row whose SKU does not match counts as <strong>Undefined</strong> across the whole app.
+        <div class="form-hint" style="margin-bottom:10px;font-family:var(--font-body);font-weight:400">
+          Add segments in order. Any inventory row whose SKU does not match counts as <strong style="font-weight:600">Undefined</strong> across the whole app.
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 200px;gap:8px;margin-bottom:8px">
-          <div class="form-hint" style="font-size:11px;line-height:1.55;padding:7px 0">
-            Each segment below has its own <strong>Separator before</strong> control — pick a hyphen, underscore, dot, or <em>None</em> to concatenate. Mix and match to build any SKU shape.
+        <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:10px;align-items:end">
+          <div class="form-hint" style="font-family:var(--font-body);font-size:12px;font-weight:400;line-height:1.55;padding:0">
+            Each segment below has its own <strong style="font-weight:600">Separator before</strong> control — pick a hyphen, underscore, dot, or <em style="font-style:normal;font-weight:600">None</em> to concatenate. Mix and match to build any SKU shape.
           </div>
           <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">Case</label>
-            <select class="form-select" data-sku-case style="font-size:12px;padding:6px 8px">
+            <label class="form-label" style="font-family:var(--font-body);font-size:11.5px;font-weight:600">Case</label>
+            <select class="form-select" data-sku-case style="font-family:var(--font-body);font-size:13px;padding:7px 10px">
               <option value="ci"${useStruct.case_insensitive !== false ? ' selected' : ''}>Case-insensitive</option>
               <option value="cs"${useStruct.case_insensitive === false ? ' selected' : ''}>Case-sensitive</option>
             </select>
           </div>
         </div>
 
-        <div data-sku-segments style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px"></div>
-        <button type="button" class="btn btn-secondary btn-sm" data-sku-add-seg style="font-size:11.5px">+ Add segment</button>
+        <div data-sku-segments style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
+        <button type="button" class="btn btn-secondary btn-sm" data-sku-add-seg style="font-family:var(--font-body);font-size:12.5px;font-weight:500">+ Add segment</button>
 
-        <div style="margin-top:14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm)">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-4);margin-bottom:6px">Your SKU structure</div>
-          <div data-sku-template style="font-family:monospace;font-size:14px;font-weight:600;color:var(--primary-text);word-break:break-all;min-height:20px">—</div>
+        <div style="margin-top:14px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm)">
+          <div style="font-family:var(--font-body);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-4);margin-bottom:6px">Your SKU structure</div>
+          <div data-sku-template style="font-family:var(--font-title);font-size:15px;font-weight:700;color:var(--primary-text);word-break:break-all;min-height:22px;line-height:1.45">—</div>
 
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-4);margin:12px 0 6px">Example</div>
-          <div data-sku-sample style="font-family:monospace;font-size:13px;color:var(--txt-2);min-height:18px">—</div>
+          <div style="font-family:var(--font-body);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-4);margin:14px 0 6px">Example</div>
+          <div data-sku-sample style="font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--txt-2);min-height:18px;letter-spacing:.01em">—</div>
 
-          <details style="margin-top:12px;border-top:1px dashed var(--border);padding-top:10px">
-            <summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--txt-4);user-select:none">Advanced — compiled regex</summary>
-            <div data-sku-preview style="margin-top:6px;font-family:monospace;font-size:11px;color:var(--txt-4);word-break:break-all">—</div>
-          </details>
-
-          <div style="display:flex;align-items:center;gap:8px;margin-top:14px">
-            <input class="form-input" data-sku-test placeholder="Paste a SKU to test, e.g. ARA1-12345-998877" style="flex:1">
-            <span data-sku-test-result style="font-size:12px;font-weight:600;white-space:nowrap;min-width:96px;text-align:right">—</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:16px">
+            <input class="form-input" data-sku-test placeholder="Paste a SKU to test, e.g. ARA1-12345-998877" style="flex:1;font-family:var(--font-body);font-weight:500">
+            <span data-sku-test-result style="font-family:var(--font-body);font-size:13px;font-weight:600;white-space:nowrap;min-width:100px;text-align:right">—</span>
           </div>
-          <div data-sku-breakdown style="margin-top:8px;font-size:11.5px;color:var(--txt-3);min-height:14px"></div>
+          <div data-sku-breakdown style="margin-top:8px;font-family:var(--font-body);font-size:12px;font-weight:400;color:var(--txt-3);min-height:14px"></div>
         </div>
       </div>`;
   }
@@ -426,7 +434,6 @@ const Settings = (() => {
 
   function _wireSkuStructureSection(rootEl) {
     if (!rootEl) return;
-    const previewEl  = rootEl.querySelector('[data-sku-preview]');
     const templateEl = rootEl.querySelector('[data-sku-template]');
     const sampleEl   = rootEl.querySelector('[data-sku-sample]');
     const testEl     = rootEl.querySelector('[data-sku-test]');
@@ -435,9 +442,10 @@ const Settings = (() => {
 
     const refresh = () => {
       const struct = SkuEngine.coerceToV2(_readSkuStructureFromInputs(rootEl));
-      const compiled = SkuEngine.compileSegmentsRegex(struct);
 
-      // Friendly template (top, prominent).
+      // Friendly template + concrete example. The compiled regex is computed
+      // internally and used by the engine, but it is NEVER surfaced to the
+      // admin — regex syntax is intentionally hidden from non-technical users.
       if (!struct.enabled) {
         templateEl.textContent = 'Validation disabled';
         templateEl.style.color = 'var(--txt-4)';
@@ -450,15 +458,6 @@ const Settings = (() => {
         templateEl.textContent = _buildStructureTemplate(struct);
         templateEl.style.color = 'var(--primary-text)';
         sampleEl.textContent   = _buildStructureSample(struct);
-      }
-
-      // Compiled regex (collapsed by default — power-user info only).
-      if (!compiled) {
-        previewEl.textContent = 'No regex compiled (structure incomplete or disabled).';
-        previewEl.style.color = 'var(--txt-4)';
-      } else {
-        previewEl.textContent = compiled;
-        previewEl.style.color = 'var(--txt-4)';
       }
 
       // Test-SKU result and parsed breakdown.
