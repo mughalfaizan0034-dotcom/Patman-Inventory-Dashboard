@@ -80,7 +80,8 @@
 }
 
 .kpi-value {
-  font-family: var(--font-title);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
   font-size: 28px;
   font-weight: 700;
   color: var(--txt-1);
@@ -954,7 +955,7 @@
   font-size: 36px;
   font-weight: 700;
   color: var(--txt-1);
-  font-family: var(--font-title);
+  font-family: var(--font-number);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   letter-spacing: -.015em;
@@ -1030,11 +1031,12 @@
 }
 .kpi-sub-value {
   /* Values are the main signal — slightly larger and bolder than before
-     to widen the contrast with the down-sized labels above. */
+     to widen the contrast with the down-sized labels above. Numbers stay
+     in Inter (--font-number) regardless of visual prominence. */
   font-size: 22px;
   font-weight: 700;
   color: var(--txt-1);
-  font-family: var(--font-title);
+  font-family: var(--font-number);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   letter-spacing: -.015em;

@@ -50,9 +50,18 @@
   --sidebar-w: 240px;
   --topbar-h:  60px;
 
-  /* Typography */
-  --font-title: 'Quicksand', sans-serif;
-  --font-body:  'Inter', sans-serif;
+  /* Typography
+     - --font-title  : Quicksand, used ONLY for page/section/card titles.
+     - --font-body   : Inter, the universal text font.
+     - --font-number : Inter, used for ALL numeric values and identifiers
+                       (KPI figures, table number cells, UIDs, UPCs, order IDs,
+                       part numbers) — even when they appear inside an element
+                       that visually reads as a title. Numbers must never be
+                       Quicksand. Set as a separate alias so the intent is
+                       obvious at every call site. */
+  --font-title:  'Quicksand', sans-serif;
+  --font-body:   'Inter', sans-serif;
+  --font-number: 'Inter', sans-serif;
 
   /* Motion */
   --ease: cubic-bezier(.4, 0, .2, 1);

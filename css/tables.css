@@ -58,8 +58,22 @@
 }
 .data-table tbody td.wrap { white-space: normal; word-break: break-word; }
 
-/* Numeric column */
+/* Numeric column — right-aligned by default + always rendered in Inter
+   (--font-number) with tabular figures so digits column-align across rows.
+   Quicksand is reserved for titles only — numbers are always Inter. */
 .data-table td.num, .data-table th.num { text-align: right; }
+.data-table td.num                     { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
+
+/* Identifier chips (UIDs, order IDs, UPCs, part numbers) always use Inter
+   with tabular figures so digits column-align — overrides any inline
+   monospace styling that may still ship in older JS templates. */
+.row-uid,
+.data-table .id-cell,
+.data-table .mono-cell {
+  font-family: var(--font-number) !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
 
 /* Stock coloring */
 .stock-positive { color: var(--success); font-weight: 600; }

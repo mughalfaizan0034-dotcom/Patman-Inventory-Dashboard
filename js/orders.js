@@ -151,7 +151,7 @@ const Orders = (() => {
 
       const shortId = id ? id.slice(0, 8) : '—';
       const uidCell = id
-        ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(id)}" style="font-family:'Courier New',monospace;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
+        ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(id)}" style="font-family:var(--font-number);font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
         : `<span style="color:var(--txt-4)">—</span>`;
 
       const orderIdRaw  = row.order_id || '';
