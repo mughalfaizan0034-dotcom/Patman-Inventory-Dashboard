@@ -1054,7 +1054,7 @@ const Settings = (() => {
           </div>
           <div class="form-hint">At least one member is required. You're pre-selected so you keep access to manage the new org.</div>
         </div>
-        ${_renderSkuStructureSection(null)}
+        ${_renderSkuStructureSection(null, { required: true })}
         <div data-field="error" class="form-error" style="display:none"></div>
       </form>`);
     m.setFooter(`
@@ -1096,6 +1096,9 @@ const Settings = (() => {
     if (!slug)                          return showErr('Slug is required.');
     if (!/^[-a-z0-9]+$/.test(slug))     return showErr('Slug must be lowercase letters, numbers, hyphens only.');
     if (!userIds.length)                return showErr('Assign at least one member.');
+    if (!sku_structure || !sku_structure.segments?.length) {
+      return showErr('SKU structure is required. Enable validation and add at least one segment.');
+    }
 
     if (errEl) errEl.style.display = 'none';
     Loading.btn(saveBtn, true);

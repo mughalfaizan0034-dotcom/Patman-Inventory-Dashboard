@@ -201,6 +201,7 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo }) {
         // Sales KPIs
         unitsSold:              unitsSoldRaw,
         unknownUnitsSold,
+        unknownOrders,
         wrongPartUnits,
         totalOrders:            Number(ordRow.total_orders             ?? 0),
         activePlatforms:        Number(ordRow.active_platforms         ?? 0),
@@ -214,7 +215,7 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo }) {
         totalSkus: 0, totalUnits: 0, soldUnitsMatched: 0, actualUnitsSold: 0,
         fulfilledUnits: 0, physicalRemainingUnits: 0,
         phantomUnits: 0, inStockSkus: 0, oosSkus: 0, phantomSkus: 0, undefinedSkus: 0,
-        unitsSold: 0, unknownUnitsSold: 0, wrongPartUnits: 0,
+        unitsSold: 0, unknownUnitsSold: 0, unknownOrders: 0, wrongPartUnits: 0,
         totalOrders: 0, activePlatforms: 0, ignoredOrders: 0,
         remainingStock: 0,
       };
