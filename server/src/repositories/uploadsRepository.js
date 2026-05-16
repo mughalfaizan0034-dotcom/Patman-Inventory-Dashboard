@@ -303,25 +303,38 @@ export function createUploadsRepository({ bq, projectId }) {
 
   async function updateOrdersByOrderId(organizationId, rows) {
     if (!rows.length) return { failures: [] };
+    // `shipped_touched` is the sentinel: when the user fills the shipped_sku
+    // cell, the schema sets the field on the row. We then OVERWRITE BOTH
+    // shipped columns (one will be null, the other populated) instead of
+    // COALESCE-preserving. Without this, switching from a box-override to a
+    // wrong-part override would leave the old shipped_from_box hanging.
     const params = {
       organizationId,
-      rows: rows.map(r => ({
-        order_row_id:     r.order_row_id,
-        order_date:       r.order_date       ?? null,
-        sku:              r.sku              ?? null,
-        quantity_sold:    r.quantity_sold    ?? null,
-        platform:         r.platform         ?? null,
-        shipped_from_box: r.shipped_from_box ?? null,
-      })),
+      rows: rows.map(r => {
+        const shippedTouched = Object.prototype.hasOwnProperty.call(r, 'shipped_from_box')
+                            || Object.prototype.hasOwnProperty.call(r, 'shipped_sku_override');
+        return {
+          order_row_id:         r.order_row_id,
+          order_date:           r.order_date       ?? null,
+          sku:                  r.sku              ?? null,
+          quantity_sold:        r.quantity_sold    ?? null,
+          platform:             r.platform         ?? null,
+          shipped_from_box:     r.shipped_from_box     ?? null,
+          shipped_sku_override: r.shipped_sku_override ?? null,
+          shipped_touched:      shippedTouched,
+        };
+      }),
     };
     const types = {
       rows: [{
-        order_row_id:     'STRING',
-        order_date:       'STRING',
-        sku:              'STRING',
-        quantity_sold:    'INT64',
-        platform:         'STRING',
-        shipped_from_box: 'STRING',
+        order_row_id:         'STRING',
+        order_date:           'STRING',
+        sku:                  'STRING',
+        quantity_sold:        'INT64',
+        platform:             'STRING',
+        shipped_from_box:     'STRING',
+        shipped_sku_override: 'STRING',
+        shipped_touched:      'BOOL',
       }],
     };
     const query = `
@@ -330,11 +343,12 @@ export function createUploadsRepository({ bq, projectId }) {
       ON t.organization_id = @organizationId AND t.order_row_id = s.order_row_id
       WHEN MATCHED THEN
         UPDATE SET
-          order_date       = COALESCE(s.order_date,       t.order_date),
-          sku              = COALESCE(s.sku,              t.sku),
-          quantity_sold    = COALESCE(s.quantity_sold,    t.quantity_sold),
-          platform         = COALESCE(s.platform,         t.platform),
-          shipped_from_box = COALESCE(s.shipped_from_box, t.shipped_from_box)
+          order_date           = COALESCE(s.order_date,    t.order_date),
+          sku                  = COALESCE(s.sku,           t.sku),
+          quantity_sold        = COALESCE(s.quantity_sold, t.quantity_sold),
+          platform             = COALESCE(s.platform,      t.platform),
+          shipped_from_box     = CASE WHEN s.shipped_touched THEN s.shipped_from_box     ELSE t.shipped_from_box     END,
+          shipped_sku_override = CASE WHEN s.shipped_touched THEN s.shipped_sku_override ELSE t.shipped_sku_override END
     `;
     try {
       await bq.query({ query, params, types });

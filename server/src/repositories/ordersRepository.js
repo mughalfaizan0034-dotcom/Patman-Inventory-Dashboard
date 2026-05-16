@@ -11,6 +11,18 @@ function _bareBox(v) {
   return m ? m[1] : s;
 }
 
+// A row is "wrong_part" when shipped_sku_override is populated AND its
+// part-UPC suffix differs from the ordered SKU's. Same-part-different-box
+// overrides land in shipped_from_box (not shipped_sku_override), so the
+// presence of a non-null override already strongly implies wrong-part — but
+// we re-check in SQL to be safe (legacy data, inline-edit edge cases).
+const WRONG_PART_SQL = `
+  o.shipped_sku_override IS NOT NULL
+  AND TRIM(o.shipped_sku_override) != ''
+  AND COALESCE(REGEXP_EXTRACT(o.shipped_sku_override, r'^ARA[0-9]+(.+)$'), o.shipped_sku_override)
+      != COALESCE(REGEXP_EXTRACT(o.sku, r'^ARA[0-9]+(.+)$'), o.sku)
+`.trim();
+
 export function createOrdersRepository({ bq, projectId }) {
   const table    = `\`${projectId}.${TABLES.ORDERS}\``;
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -21,9 +33,10 @@ export function createOrdersRepository({ bq, projectId }) {
   // so no soft-delete filtering is needed here anymore.
   function _statusCondition(status) {
     switch (status) {
-      case 'unknown': return `AND inv.sku IS NULL`;
-      case 'normal':  return `AND inv.sku IS NOT NULL`;
-      default:        return '';
+      case 'unknown':    return `AND inv.sku IS NULL`;
+      case 'normal':     return `AND inv.sku IS NOT NULL`;
+      case 'wrong_part': return `AND (${WRONG_PART_SQL})`;
+      default:           return '';
     }
   }
 
@@ -44,8 +57,8 @@ export function createOrdersRepository({ bq, projectId }) {
     const col = ALLOWED_SORT.includes(sortBy) ? `o.${sortBy}` : 'o.order_date';
     const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
-    // "Unknown" = effective_sku (with shipped_from_box override applied)
-    // does NOT exist in inventory. mapped_inventory_sku rescues a few rows.
+    // "Unknown" = effective_sku (with shipped overrides applied) does NOT
+    // exist in inventory. mapped_inventory_sku rescues a few rows.
     // This MUST match the dashboard's Unknown UNITS calculation so totals
     // line up between the Orders page filter and the dashboard KPI.
     const dataQuery = `
@@ -55,13 +68,14 @@ export function createOrdersRepository({ bq, projectId }) {
       o_eff AS (
         SELECT
           o.*,
-          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box' })} AS effective_sku
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box', overrideCol: 'o.shipped_sku_override' })} AS effective_sku
         FROM ${table} o
       )
       SELECT
-        o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
+        o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.shipped_sku_override, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
-        (inv.sku IS NULL)                    AS is_unknown
+        (inv.sku IS NULL)                    AS is_unknown,
+        (${WRONG_PART_SQL})                  AS is_wrong_part
       FROM o_eff o
       LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.effective_sku) = inv.sku
       WHERE ${baseWhere} ${statusCond}
@@ -76,7 +90,7 @@ export function createOrdersRepository({ bq, projectId }) {
       o_eff AS (
         SELECT
           o.*,
-          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box' })} AS effective_sku
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box', overrideCol: 'o.shipped_sku_override' })} AS effective_sku
         FROM ${table} o
       )
       SELECT COUNT(*) AS total
@@ -123,13 +137,14 @@ export function createOrdersRepository({ bq, projectId }) {
       o_eff AS (
         SELECT
           o.*,
-          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box' })} AS effective_sku
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_from_box', overrideCol: 'o.shipped_sku_override' })} AS effective_sku
         FROM ${table} o
       )
       SELECT
-        o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.platform, o.created_at,
+        o.order_row_id, o.order_id, o.order_date, o.sku, o.quantity_sold, o.shipped_from_box, o.shipped_sku_override, o.platform, o.created_at,
         COALESCE(o.mapped_inventory_sku, '') AS mapped_inventory_sku,
-        (inv.sku IS NULL)                    AS is_unknown
+        (inv.sku IS NULL)                    AS is_unknown,
+        (${WRONG_PART_SQL})                  AS is_wrong_part
       FROM o_eff o
       LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.effective_sku) = inv.sku
       WHERE ${baseWhere} ${statusCond}
@@ -190,22 +205,24 @@ export function createOrdersRepository({ bq, projectId }) {
     const query = `
       UPDATE ${table}
       SET
-        order_date       = @orderDate,
-        quantity_sold    = @quantitySold,
-        platform         = @platform,
-        shipped_from_box = @shippedFromBox
+        order_date           = @orderDate,
+        quantity_sold        = @quantitySold,
+        platform             = @platform,
+        shipped_from_box     = @shippedFromBox,
+        shipped_sku_override = @shippedSkuOverride
       WHERE order_row_id = @rowId AND organization_id = @organizationId
     `;
     await bq.query({
       query,
       params: {
         organizationId, rowId,
-        orderDate:      updates.order_date,
-        quantitySold:   updates.quantity_sold,
-        platform:       updates.platform,
-        shippedFromBox: updates.shipped_from_box ?? null,
+        orderDate:          updates.order_date,
+        quantitySold:       updates.quantity_sold,
+        platform:           updates.platform,
+        shippedFromBox:     updates.shipped_from_box     ?? null,
+        shippedSkuOverride: updates.shipped_sku_override ?? null,
       },
-      types: { shippedFromBox: 'STRING' },
+      types: { shippedFromBox: 'STRING', shippedSkuOverride: 'STRING' },
     });
   }
 

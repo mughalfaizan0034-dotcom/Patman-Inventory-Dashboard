@@ -590,10 +590,141 @@ body.sidebar-mobile-open .sidebar-backdrop {
 .section-sub     { font-size: 13px; color: var(--txt-3); margin-top: 3px; }
 .section-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-/* ── Responsive ─────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────
+   Responsive
+   ─────────────────────────────────────────────────────────────
+   Strategy:
+   - Desktop  (>1024px): viewport-fit layout (no main page scroll —
+     only tables, charts, and content regions scroll internally).
+   - Tablet   (≤1024px): main wrapper scrolls; pages and inner
+     regions revert to natural page flow. Sidebar still inline.
+   - Mobile   (≤768px):  sidebar becomes off-canvas with backdrop.
+                         Hamburger button in the topbar opens it.
+   - Small    (≤480px):  tighter paddings and stacked elements.
+   ────────────────────────────────────────────────────────────── */
+
+/* ── Tablet & below: allow main page to scroll ──────────────── */
+@media (max-width: 1024px) {
+  #app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  .main-wrapper {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  .page-content {
+    overflow: visible;
+    flex: 1 1 auto;
+  }
+  .page.active {
+    overflow: visible;
+    flex: 1 1 auto;
+  }
+
+  /* Pages with custom viewport-fit flex layout revert to natural flow */
+  #page-dashboard,
+  #page-box-lookup,
+  #page-uploads,
+  #page-settings,
+  #page-inventory,
+  #page-orders { overflow: visible; }
+
+  /* Internal scroll regions release their scroll on tablet — page scrolls instead */
+  .dash-charts-area,
+  .blookup-body,
+  .uploads-history,
+  #page-settings .tab-panel.active,
+  .settings-logs-content {
+    overflow: visible;
+    flex: 0 0 auto;
+  }
+
+  /* Tables still scroll horizontally when they overflow */
+  #page-inventory .table-wrap,
+  #page-orders .table-wrap,
+  .uploads-history .table-wrap {
+    flex: 0 0 auto;
+    overflow-x: auto;
+    overflow-y: visible;
+    max-height: none;
+  }
+
+  /* Settings tab content stops being a viewport-fit flex column */
+  .settings-body { flex: 0 0 auto; }
+  .settings-logs-card { min-height: 0; }
+
+  /* Topbar no longer needs to be sticky inside a fixed shell */
+  .topbar { position: sticky; top: 0; }
+
+  /* Padding trims for denser content */
+  #page-inventory,
+  #page-orders { padding: 14px; }
+  .uploads-top { padding: 14px 16px 12px; }
+  .uploads-history { padding: 12px 16px 16px; }
+  .blookup-search { padding: 10px 16px; }
+  .blookup-body { padding: 16px; }
+  .settings-sticky { padding: 14px 16px 0; }
+  .settings-body { padding: 14px 16px 16px; }
+}
+
+/* ── Mobile: off-canvas sidebar with backdrop ───────────────── */
 @media (max-width: 768px) {
-  :root { --sidebar-w: 0px; }
-  .sidebar { transform: translateX(-240px); transition: transform var(--dur) var(--ease); }
-  .sidebar.open { transform: translateX(0); width: 240px; min-width: 240px; }
+  :root { --sidebar-w: 0px; --topbar-h: 56px; }
+
+  /* Sidebar slides off-screen by default; opens via .sidebar-mobile-open */
+  .sidebar {
+    width: 260px;
+    min-width: 260px;
+    transform: translateX(-100%);
+    transition: transform 240ms var(--ease);
+    z-index: 1000;
+  }
+  body.sidebar-mobile-open .sidebar { transform: translateX(0); }
+
+  /* Always show expanded sidebar contents in the off-canvas view */
+  body.sidebar-collapsed .sidebar { width: 260px; min-width: 260px; }
+  body.sidebar-collapsed .sidebar-header     { padding: 14px 16px; justify-content: flex-start; gap: 10px; }
+  body.sidebar-collapsed .sidebar-toggle     { display: none; }
+  body.sidebar-collapsed .sidebar-logo-btn   { display: none; }
+  body.sidebar-collapsed .sidebar-menu-label { opacity: 1; max-width: none; }
+  body.sidebar-collapsed .sidebar-nav        { padding: 10px 8px; }
+  body.sidebar-collapsed .nav-item           { justify-content: flex-start; padding: 9px 12px; }
+  body.sidebar-collapsed .nav-label          { opacity: 1; max-width: none; }
+  body.sidebar-collapsed .sidebar-user-info  { display: block; }
+  body.sidebar-collapsed .sidebar-logout     { display: flex; }
+
+  /* In off-canvas mode the in-sidebar toggle hides — topbar hamburger handles open. */
+  .sidebar-toggle { display: none; }
+
+  /* Main wrapper now occupies full width */
   .main-wrapper { margin-left: 0; }
+  body.sidebar-collapsed .main-wrapper { margin-left: 0; }
+
+  /* Topbar hamburger appears */
+  .topbar-menu-btn { display: flex; }
+  .topbar { padding: 0 14px; gap: 10px; }
+  .topbar-title { font-size: 16px; }
+
+  /* Tighter page paddings */
+  #page-inventory,
+  #page-orders { padding: 10px; }
+  .uploads-top { padding: 12px; }
+  .uploads-history { padding: 10px 12px 14px; }
+  .blookup-search { padding: 10px 12px; }
+  .blookup-body { padding: 12px; }
+  .settings-sticky { padding: 12px 12px 0; }
+  .settings-body { padding: 12px; }
+}
+
+/* ── Small mobile: tightest layout ──────────────────────────── */
+@media (max-width: 480px) {
+  :root { --topbar-h: 52px; }
+  .topbar { padding: 0 10px; gap: 8px; }
+  .topbar-title { font-size: 15px; }
+  .topbar-actions { gap: 6px; }
+  .login-card { padding: 28px 22px; }
+  .section-title { font-size: 18px; }
 }
