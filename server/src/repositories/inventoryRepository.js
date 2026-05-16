@@ -147,10 +147,10 @@ export function createInventoryRepository({ bq, projectId, orgsRepo }) {
 
     const [, boxNum, partNumber, upc] = match;
     // CANONICAL: bare digits, matching the form used by alternatives[].box_number
-    // below and by the database column shipped_from_box / box_number. Returning
-    // "ARA667" here caused the popover's .find() to miss the original row
-    // (Original showed Qty 0) AND the !== filter to fail (original SKU
-    // appeared a second time at the bottom of the list).
+    // below and by the database columns inventory.box_number and orders.shipped_sku
+    // (when stored as box-only). Returning "ARA667" here caused the popover's
+    // .find() to miss the original row (Original showed Qty 0) AND the !==
+    // filter to fail (original SKU appeared a second time at the bottom).
     const originalBox = boxNum;
 
     const query = `
@@ -199,7 +199,7 @@ export function createInventoryRepository({ bq, projectId, orgsRepo }) {
     // Some older inventory rows may have box_number stored as "ARA20" or even
     // a full SKU "ARA20-part-upc" due to past user-entry errors. Canonicalize
     // to bare digits before exposing to the frontend popover, otherwise
-    // selecting the box would store the bad form into shipped_from_box.
+    // selecting the box would store the bad form into shipped_sku.
     const _bareBox = (v) => {
       const s = String(v ?? '').trim();
       const m = s.match(/^ARA(\d+)(?:-.*)?$/i);
