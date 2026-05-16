@@ -296,6 +296,7 @@ const API = (() => {
     // same metrics engine that powers dashboard KPIs.
     async getSkuSummary(page=1, pageSize=CONFIG.PAGE_SIZE, search='', options={}) { return _crGet('/inventory/sku-summary', { page, pageSize, search, ...options }); },
     async getRawRowsBySku(sku)                                                    { return _crGet('/inventory/by-sku', { sku }); },
+    async exportSkuSummary(filters={})                                            { return _crGetBlob('/inventory/sku-summary/export', filters); },
     async exportInventory(filters={}) { return _crGetBlob('/inventory/export', filters); },
 
     /* Orders */

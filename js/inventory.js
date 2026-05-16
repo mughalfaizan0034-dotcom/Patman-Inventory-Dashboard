@@ -468,13 +468,18 @@ const InventoryList = (() => {
         drillTr.querySelector('div').innerHTML = '<span style="color:var(--txt-4)">No raw rows for this SKU.</span>';
         return;
       }
+      // Raw row schema mirrors the feed-file columns exactly: every field
+      // an operator can upload via TSV ends up visible here so the drilldown
+      // is also the audit trail for a SKU's upload history.
       const head = `<thead><tr>
-        <th style="width:100px;font-size:11px">UID</th>
-        <th style="font-size:11px">Box #</th>
-        <th class="num" style="font-size:11px">Qty</th>
-        <th style="font-size:11px">Date Added</th>
+        <th style="width:96px;font-size:11px">UID</th>
+        <th style="width:70px;font-size:11px">Box #</th>
+        <th style="font-size:11px">Part #</th>
+        <th style="font-size:11px">UPC</th>
+        <th class="num" style="width:96px;font-size:11px">Initial Stock</th>
+        <th style="width:110px;font-size:11px">Date Added</th>
         <th style="font-size:11px">Notes</th>
-        <th style="width:90px;text-align:right;font-size:11px"></th>
+        <th style="width:50px;text-align:right;font-size:11px"></th>
       </tr></thead>`;
       const body = rows.map(r => {
         const uid     = r.row_uid || '';
@@ -492,11 +497,13 @@ const InventoryList = (() => {
                     data-date="${Utils.escapeHtml(r.date_added || '')}">
           <td>${uidCell}</td>
           <td>${Utils.escapeHtml(r.box_number || '—')}</td>
-          <td class="num">${Utils.formatNumber(r.quantity ?? 0)}</td>
-          <td>${Utils.formatDate(r.date_added)}</td>
+          <td style="font-family:'Courier New',monospace;font-size:12px;color:var(--txt-2)">${Utils.escapeHtml(r.part_number || '—')}</td>
+          <td style="font-family:'Courier New',monospace;font-size:12px;color:var(--txt-2)">${Utils.escapeHtml(r.upc || '—')}</td>
+          <td class="num" style="font-weight:600">${Utils.formatNumber(r.quantity ?? 0)}</td>
+          <td style="white-space:nowrap">${Utils.formatDate(r.date_added)}</td>
           <td style="font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(r.notes || '—')}</td>
           <td style="text-align:right">
-            ${canEdit ? '<button class="btn btn-ghost btn-icon btn-sm sku-raw-edit" title="Edit" style="opacity:.65"><i data-lucide="pencil" class="icon" style="width:12px;height:12px"></i></button>' : ''}
+            ${canEdit ? '<button class="btn btn-ghost btn-icon btn-sm sku-raw-edit" title="Edit raw row" style="opacity:.65"><i data-lucide="pencil" class="icon" style="width:12px;height:12px"></i></button>' : ''}
           </td>
         </tr>`;
       }).join('');
@@ -649,7 +656,10 @@ const InventoryList = (() => {
     load();
   }
 
-  /* ── Export ──────────────────────────────────────────────── */
+  /* ── Export ──────────────────────────────────────────────────
+     Exports the SKU-LEVEL aggregate (the same dataset the page shows),
+     NOT the raw upload rows behind each SKU. The drilldown is for
+     operational audit; the export is for SKU intelligence reporting. */
   let _exporting = false;
   async function _doExportInventory() {
     if (_exporting) return;
@@ -659,15 +669,15 @@ const InventoryList = (() => {
     const isFiltered = _search || _statusFilter !== 'all';
     try {
       const filters = {};
-      if (_sortBy)                        filters.sort_by  = _sortBy;
-      if (_sortDir)                       filters.sort_dir = _sortDir;
-      if (_search)                        filters.search   = _search;
-      if (_statusFilter && _statusFilter !== 'all') filters.status = _statusFilter;
-      const blob = await API.exportInventory(filters);
+      if (_sortBy)                                  filters.sort_by  = _sortBy;
+      if (_sortDir)                                 filters.sort_dir = _sortDir;
+      if (_search)                                  filters.search   = _search;
+      if (_statusFilter && _statusFilter !== 'all') filters.status   = _statusFilter;
+      const blob = await API.exportSkuSummary(filters);
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
-      a.download = `inventory_${isFiltered ? 'filtered_' : ''}export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `sku_view_${isFiltered ? 'filtered_' : ''}export_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {

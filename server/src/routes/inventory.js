@@ -64,6 +64,43 @@ export async function inventoryRoutes(fastify, { inventoryService, metricsServic
     }
   });
 
+  // SKU summary export (CSV) — same canonical aggregate as the page, served
+  // unpaginated so the operator gets the full SKU-level dataset.
+  // Deliberately separate from /export (which still serves raw upload rows
+  // for backwards compatibility and legacy operational audits).
+  fastify.get('/sku-summary/export', { preHandler: [authenticate] }, async (request, reply) => {
+    const exportSchema = skuSummaryQuerySchema.extend({
+      pageSize: positiveInt.max(100000).optional().default(100000),
+    });
+    const parsed = exportSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ success: false, error: 'Invalid query parameters' });
+    }
+    const { sort_by, sort_dir, ...rest } = parsed.data;
+    try {
+      const { items } = await metricsService.getSkuSummary(request.user.organization_id, {
+        ...rest, sortBy: sort_by, sortDir: sort_dir,
+      });
+      const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const header = 'SKU,Part #,UPC,Total Stock,Sold,Fulfilled,Phantom,Remaining,Boxes,Last Added';
+      const lines = items.map(r => [
+        r.sku, r.part_number, r.upc,
+        r.total_stock, r.sold_units, r.fulfilled_units, r.phantom_units, r.remaining_units,
+        r.boxes_count, r.last_added_at,
+      ].map(esc).join(','));
+      const isFiltered = rest.search || rest.status !== 'all';
+      const filename   = `sku_view_${isFiltered ? 'filtered_' : ''}export_${new Date().toISOString().slice(0,10)}.csv`;
+      const csv        = '﻿' + [header, ...lines].join('\n');
+
+      reply.header('Content-Type', 'text/csv; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      return reply.send(csv);
+    } catch (err) {
+      request.log.error({ err }, 'SKU summary export error');
+      return reply.code(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
+
   // Raw inventory rows for a single SKU — drives the SKU-row drilldown.
   fastify.get('/by-sku', { preHandler: [authenticate] }, async (request, reply) => {
     const sku = (request.query.sku || '').trim();
