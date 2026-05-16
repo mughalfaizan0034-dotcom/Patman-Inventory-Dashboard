@@ -105,36 +105,25 @@
   position: relative;
 }
 
-/* Logo button — hidden when expanded, shown (centered) when collapsed.
+/* Expand button — hidden when expanded, shown (centered) when collapsed.
    Acts as the click target to re-expand the sidebar in collapsed state. */
-.sidebar-logo-btn {
-  width: 34px; height: 34px;
+.sidebar-expand-btn {
+  width: 36px; height: 36px;
   border: none;
-  background: transparent;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--txt-2);
   padding: 0;
   cursor: pointer;
   display: none;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--r-sm);
-  transition: transform var(--dur) var(--ease);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.sidebar-logo-btn:hover { transform: scale(1.04); }
-.sidebar-logo-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
-.sidebar-logo {
-  width: 34px; height: 34px;
-  background: var(--primary);
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-title);
-  font-size: 15px; font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-}
+.sidebar-expand-btn:hover { background: var(--primary-50); color: var(--primary-text); }
+.sidebar-expand-btn:active { transform: scale(.95); }
+.sidebar-expand-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* "Menu" label shown in expanded state in place of the old brand text */
 .sidebar-menu-label {
@@ -219,10 +208,10 @@
 body.sidebar-collapsed .sidebar         { width: 64px; min-width: 64px; }
 body.sidebar-collapsed .main-wrapper   { margin-left: 64px; }
 
-body.sidebar-collapsed .sidebar-header     { padding: 13px 0; justify-content: center; gap: 0; }
-body.sidebar-collapsed .sidebar-menu-label { opacity: 0; max-width: 0; }
-body.sidebar-collapsed .sidebar-toggle     { display: none; }
-body.sidebar-collapsed .sidebar-logo-btn   { display: flex; }
+body.sidebar-collapsed .sidebar-header      { padding: 13px 0; justify-content: center; gap: 0; }
+body.sidebar-collapsed .sidebar-menu-label  { opacity: 0; max-width: 0; }
+body.sidebar-collapsed .sidebar-toggle      { display: none; }
+body.sidebar-collapsed .sidebar-expand-btn  { display: flex; }
 
 body.sidebar-collapsed .sidebar-nav    { padding: 10px 6px; }
 body.sidebar-collapsed .nav-item       { justify-content: center; padding: 10px 0; }
@@ -660,10 +649,10 @@ body.sidebar-mobile-open .sidebar-backdrop {
 
   /* Always show expanded sidebar contents in the off-canvas view */
   body.sidebar-collapsed .sidebar { width: 260px; min-width: 260px; }
-  body.sidebar-collapsed .sidebar-header     { padding: 14px 16px; justify-content: flex-start; gap: 10px; }
-  body.sidebar-collapsed .sidebar-toggle     { display: none; }
-  body.sidebar-collapsed .sidebar-logo-btn   { display: none; }
-  body.sidebar-collapsed .sidebar-menu-label { opacity: 1; max-width: none; }
+  body.sidebar-collapsed .sidebar-header      { padding: 14px 16px; justify-content: flex-start; gap: 10px; }
+  body.sidebar-collapsed .sidebar-toggle      { display: none; }
+  body.sidebar-collapsed .sidebar-expand-btn  { display: none; }
+  body.sidebar-collapsed .sidebar-menu-label  { opacity: 1; max-width: none; }
   body.sidebar-collapsed .sidebar-nav        { padding: 10px 8px; }
   body.sidebar-collapsed .nav-item           { justify-content: flex-start; padding: 9px 12px; }
   body.sidebar-collapsed .nav-label          { opacity: 1; max-width: none; }
