@@ -187,6 +187,12 @@ function _normalizeSegment(seg) {
       ? seg.values.map(v => String(v ?? '').trim()).filter(Boolean)
       : null,
     pattern:            typeof seg.pattern === 'string' && seg.pattern ? seg.pattern : null,
+    // Per-segment "separator before". Empty string = no separator (segments
+    // concatenate directly). Ignored on the first segment. Falls back to the
+    // structure-level separators[0] in _separatorBetween() when absent — that
+    // preserves Phase-2 backward compatibility for stored structures that
+    // pre-date this field.
+    prefix_separator:   typeof seg.prefix_separator === 'string' ? seg.prefix_separator : undefined,
     allow_attached_box: type === 'identifier' && seg.allow_attached_box === true,
   };
 }
