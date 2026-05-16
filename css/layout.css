@@ -98,7 +98,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
+  /* Left padding (20px) matches the nav row inner edge:
+     sidebar-nav padding-left (8) + nav-item padding-left (12) = 20.
+     The "MENU" label therefore lines up vertically with each
+     nav item's icon below it. */
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border);
   height: var(--topbar-h);
   flex-shrink: 0;
@@ -130,11 +134,11 @@
   flex: 1;
   min-width: 0;
   font-family: var(--font-title);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: .12em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--txt-4);
+  color: var(--txt-3);
   white-space: nowrap;
   overflow: hidden;
   opacity: 1;
