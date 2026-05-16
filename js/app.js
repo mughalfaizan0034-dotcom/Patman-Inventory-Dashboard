@@ -24,153 +24,302 @@ const Settings = (() => {
     ).join('');
   }
 
-  /* ── SKU Structure builder (Organizations tab) ────────────── */
-  // Renders the same admin-only structure builder used by both the
-  // "New Organization" and "Edit Organization" modals. Three responsibilities:
-  //
-  //   _renderSkuStructureSection(struct)
-  //       → HTML for the form section, with sensible defaults when struct is null.
-  //   _wireSkuStructureSection(rootEl)
-  //       → attaches input listeners that re-compile the regex preview live and
-  //         re-test the "Test SKU" field after every keystroke.
-  //   _readSkuStructureSection(rootEl)
-  //       → harvests the current field values into a structure object suitable
-  //         for sending to the org create/update endpoints. Returns null when
-  //         the section is disabled or has no prefixes (server treats null as
-  //         "no structure configured" — legacy placeholder-only check).
+  /* ── SKU Structure builder v2 (Organizations tab) ──────────
+     Segment-aware editor used by both the New / Edit Organization modals.
+     Public API:
+       _renderSkuStructureSection(struct, { required })  → HTML
+       _wireSkuStructureSection(rootEl)                  → attaches listeners
+       _readSkuStructureSection(rootEl)                  → v2 structure or null
+     The structure object follows the canonical shape documented in
+     server/src/utils/skuEngine.js (v2: { version, enabled, separators[],
+     segments[], ... }). Legacy v1 input from the server is auto-coerced. */
 
-  const SKU_DEFAULTS = Object.freeze({
-    enabled:      false,
-    prefixes:     [],
-    separator:    '-',
-    box_pattern:  '\\d+',
-    upc_pattern:  '\\d+',
-    part_pattern: '[A-Z0-9-]+',
+  const SEGMENT_LABEL = Object.freeze({
+    identifier:  'Identifier',
+    part_number: 'Part Number',
+    upc:         'UPC',
+    box:         'Box',
+    free_text:   'Free Text',
+    wildcard:    'Wildcard',
   });
 
-  function _renderSkuStructureSection(struct) {
-    const s = (struct && typeof struct === 'object') ? struct : SKU_DEFAULTS;
-    const prefixes = Array.isArray(s.prefixes) ? s.prefixes.join(', ') : '';
-    const enabled  = s.enabled !== false && (Array.isArray(s.prefixes) ? s.prefixes.length > 0 : false);
+  function _defaultSegmentForType(type) {
+    const seg = { id: `seg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, type, required: true, values: null, pattern: null, allow_attached_box: false };
+    if (type === 'identifier')  { seg.values = ['ARA']; seg.allow_attached_box = true; }
+    if (type === 'part_number') { seg.pattern = '[A-Z0-9]+'; }
+    if (type === 'upc')         { seg.pattern = '\\d+';     }
+    if (type === 'box')         { seg.pattern = '\\d+';     }
+    if (type === 'free_text')   { seg.pattern = '[^\\s\\-_]+'; }
+    if (type === 'wildcard')    { seg.required = false; }
+    return seg;
+  }
+
+  function _defaultStructure() {
+    return {
+      version:          2,
+      enabled:          true,
+      case_insensitive: true,
+      separators:       ['-'],
+      segments: [
+        _defaultSegmentForType('identifier'),
+        _defaultSegmentForType('part_number'),
+        _defaultSegmentForType('upc'),
+      ],
+    };
+  }
+
+  function _renderSegmentRow(seg, idx) {
+    const typeOpts = SkuEngine.SEGMENT_TYPES.map(t =>
+      `<option value="${t}"${t === seg.type ? ' selected' : ''}>${Utils.escapeHtml(SEGMENT_LABEL[t] || t)}</option>`
+    ).join('');
+
+    // Per-type detail input (values for identifier, pattern for everything else)
+    let detail = '';
+    if (seg.type === 'identifier') {
+      detail = `
+        <input class="form-input" data-seg-values
+          value="${Utils.escapeHtml((seg.values || []).join(', '))}"
+          placeholder="ARA, BX"
+          title="Allowed identifier values (comma-separated)"
+          style="font-family:monospace">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-3);margin-top:4px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" data-seg-attach${seg.allow_attached_box ? ' checked' : ''} style="accent-color:var(--primary)">
+          <span>Allow attached box (ARA1 ≡ ARA-1)</span>
+        </label>`;
+    } else if (seg.type === 'wildcard') {
+      detail = `<div class="form-hint" style="font-size:11px">Matches anything.</div>`;
+    } else {
+      detail = `<input class="form-input" data-seg-pattern
+        value="${Utils.escapeHtml(seg.pattern || '')}"
+        placeholder="\\d+ / [A-Z0-9]+ / …"
+        title="Regex fragment for this segment"
+        style="font-family:monospace">`;
+    }
+
     return `
-      <div class="form-group" data-sku-structure>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <label class="form-label" style="margin:0">SKU Structure</label>
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-3);cursor:pointer">
-            <input type="checkbox" data-sku-enabled${enabled ? ' checked' : ''} style="accent-color:var(--primary)">
-            <span>Enable validation</span>
+      <div class="sku-seg-row" data-seg-id="${Utils.escapeHtml(seg.id)}"
+           style="display:grid;grid-template-columns:24px 130px 1fr auto;gap:8px;align-items:start;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)">
+        <div data-seg-index style="font-size:11px;font-weight:700;color:var(--txt-4);padding-top:8px;text-align:center">${idx + 1}</div>
+        <div>
+          <select class="form-select" data-seg-type style="font-size:12px;padding:6px 8px">${typeOpts}</select>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-3);margin-top:4px;cursor:pointer">
+            <input type="checkbox" data-seg-required${seg.required ? ' checked' : ''} style="accent-color:var(--primary)">
+            <span>Required</span>
           </label>
         </div>
-        <div class="form-hint" style="margin-bottom:6px">
-          Define the SKU pattern. Any inventory row whose SKU does not match counts as <strong>Undefined</strong> across the whole app. Leave empty to keep the legacy placeholder-only check.
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 90px;gap:8px">
-          <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">Allowed prefixes</label>
-            <input class="form-input" data-sku-prefixes value="${Utils.escapeHtml(prefixes)}" placeholder="ARA, BX">
-            <div class="form-hint" style="font-size:10.5px">Comma-separated. Match literally.</div>
-          </div>
-          <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">Separator</label>
-            <input class="form-input" data-sku-separator value="${Utils.escapeHtml(s.separator ?? '-')}" maxlength="4" style="text-align:center;font-family:monospace">
-            <div class="form-hint" style="font-size:10.5px">Default: -</div>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
-          <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">Box pattern</label>
-            <input class="form-input" data-sku-box value="${Utils.escapeHtml(s.box_pattern || '\\d+')}" placeholder="\\d+" style="font-family:monospace">
-          </div>
-          <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">UPC pattern</label>
-            <input class="form-input" data-sku-upc value="${Utils.escapeHtml(s.upc_pattern || '\\d+')}" placeholder="\\d{6,14}" style="font-family:monospace">
-          </div>
-          <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">Part pattern</label>
-            <input class="form-input" data-sku-part value="${Utils.escapeHtml(s.part_pattern || '[A-Z0-9-]+')}" placeholder="[A-Z0-9-]+" style="font-family:monospace">
-          </div>
-        </div>
-
-        <div style="margin-top:10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm)">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-4);margin-bottom:6px">Compiled pattern</div>
-          <div data-sku-preview style="font-family:monospace;font-size:12px;color:var(--txt-2);word-break:break-all;min-height:18px">—</div>
-
-          <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
-            <input class="form-input" data-sku-test placeholder="Paste a SKU to test, e.g. ARA1-123456-ABC123" style="flex:1">
-            <span data-sku-test-result style="font-size:12px;font-weight:600;white-space:nowrap;min-width:88px;text-align:right">—</span>
-          </div>
+        <div data-seg-detail>${detail}</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <button type="button" class="btn btn-ghost btn-sm" data-seg-up    title="Move up"     style="padding:2px 6px">↑</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-seg-down  title="Move down"   style="padding:2px 6px">↓</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-seg-del   title="Remove"      style="padding:2px 6px;color:var(--error)">×</button>
         </div>
       </div>`;
   }
 
+  function _renderSkuStructureSection(struct, { required = false } = {}) {
+    const v2 = SkuEngine.coerceToV2(struct);
+    // If the incoming structure was empty but the section is mandatory,
+    // start with a sensible template so the admin sees concrete segments.
+    const useStruct = (v2.segments?.length || !required) ? v2 : _defaultStructure();
+    const segments  = useStruct.segments?.length ? useStruct.segments : _defaultStructure().segments;
+    const separators = (useStruct.separators || ['-']).map(s => s === '' ? '(none)' : s).join(', ');
+
+    return `
+      <div class="form-group" data-sku-structure
+           data-required="${required ? '1' : '0'}"
+           data-segments='${Utils.escapeHtml(JSON.stringify(segments))}'>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <label class="form-label" style="margin:0">
+            SKU Structure ${required ? '<span class="req">*</span>' : ''}
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-3);cursor:pointer">
+            <input type="checkbox" data-sku-enabled${useStruct.enabled !== false ? ' checked' : ''} style="accent-color:var(--primary)">
+            <span>Enable validation</span>
+          </label>
+        </div>
+        <div class="form-hint" style="margin-bottom:8px">
+          Add segments in order. Any inventory row whose SKU does not match counts as <strong>Undefined</strong> across the whole app.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;margin-bottom:8px">
+          <div>
+            <label class="form-label" style="font-size:11px;font-weight:600">Allowed separators</label>
+            <input class="form-input" data-sku-separators value="${Utils.escapeHtml(separators)}"
+                   placeholder="-, _, (none)" style="font-family:monospace">
+            <div class="form-hint" style="font-size:10.5px">Comma-separated. <code>(none)</code> makes separators optional between segments.</div>
+          </div>
+          <div>
+            <label class="form-label" style="font-size:11px;font-weight:600">Case</label>
+            <select class="form-select" data-sku-case style="font-size:12px;padding:6px 8px">
+              <option value="ci"${useStruct.case_insensitive !== false ? ' selected' : ''}>Case-insensitive</option>
+              <option value="cs"${useStruct.case_insensitive === false ? ' selected' : ''}>Case-sensitive</option>
+            </select>
+          </div>
+        </div>
+
+        <div data-sku-segments style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px"></div>
+        <button type="button" class="btn btn-secondary btn-sm" data-sku-add-seg style="font-size:11.5px">+ Add segment</button>
+
+        <div style="margin-top:12px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm)">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-4);margin-bottom:6px">Compiled pattern</div>
+          <div data-sku-preview style="font-family:monospace;font-size:12px;color:var(--txt-2);word-break:break-all;min-height:18px">—</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+            <input class="form-input" data-sku-test placeholder="Paste a SKU to test, e.g. ARA1-12345-998877" style="flex:1">
+            <span data-sku-test-result style="font-size:12px;font-weight:600;white-space:nowrap;min-width:96px;text-align:right">—</span>
+          </div>
+          <div data-sku-breakdown style="margin-top:8px;font-size:11.5px;color:var(--txt-3);min-height:14px"></div>
+        </div>
+      </div>`;
+  }
+
+  // Parse the separator-input string into the structure separators array.
+  // "(none)" / "none" / "" → '' (separator optional).
+  function _parseSeparatorsInput(raw) {
+    return String(raw || '')
+      .split(',')
+      .map(s => s.trim())
+      .map(s => (s.toLowerCase() === '(none)' || s.toLowerCase() === 'none') ? '' : s)
+      .filter((s, i, arr) => s !== undefined && arr.indexOf(s) === i);
+  }
+
+  // Read just the raw shape — used for the live preview while editing.
+  function _readSkuStructureFromInputs(rootEl) {
+    if (!rootEl) return null;
+    const get = sel => rootEl.querySelector(sel);
+    const separators = _parseSeparatorsInput(get('[data-sku-separators]')?.value);
+    const enabled    = Boolean(get('[data-sku-enabled]')?.checked);
+    const caseMode   = get('[data-sku-case]')?.value || 'ci';
+    const segments = Array.from(rootEl.querySelectorAll('.sku-seg-row')).map(row => {
+      const id   = row.dataset.segId;
+      const type = row.querySelector('[data-seg-type]').value;
+      const required = Boolean(row.querySelector('[data-seg-required]')?.checked);
+      const seg = { id, type, required, values: null, pattern: null, allow_attached_box: false };
+      if (type === 'identifier') {
+        const valStr = row.querySelector('[data-seg-values]')?.value || '';
+        seg.values = valStr.split(',').map(v => v.trim()).filter(Boolean);
+        seg.allow_attached_box = Boolean(row.querySelector('[data-seg-attach]')?.checked);
+      } else if (type !== 'wildcard') {
+        seg.pattern = row.querySelector('[data-seg-pattern]')?.value || '';
+      }
+      return seg;
+    });
+    return { version: 2, enabled, case_insensitive: caseMode === 'ci', separators: separators.length ? separators : ['-'], segments };
+  }
+
+  // Read + normalize for sending to the API. Returns null when the section
+  // is disabled or has no valid segments — server treats null as cleared.
+  function _readSkuStructureSection(rootEl) {
+    const raw = _readSkuStructureFromInputs(rootEl);
+    if (!raw) return null;
+    const v2 = SkuEngine.coerceToV2(raw);
+    if (!v2.enabled || !v2.segments?.length) return null;
+    return v2;
+  }
+
+  function _renderSegmentList(rootEl) {
+    const segs = JSON.parse(rootEl.dataset.segments || '[]');
+    const listEl = rootEl.querySelector('[data-sku-segments]');
+    listEl.innerHTML = segs.map((s, i) => _renderSegmentRow(s, i)).join('');
+  }
+
+  // Re-snapshot the current input values back into rootEl.dataset.segments so
+  // re-render keeps the user's edits.
+  function _snapshotSegments(rootEl) {
+    const segs = _readSkuStructureFromInputs(rootEl)?.segments || [];
+    rootEl.dataset.segments = JSON.stringify(segs);
+  }
+
   function _wireSkuStructureSection(rootEl) {
     if (!rootEl) return;
-    const get = sel => rootEl.querySelector(sel);
-    const enabledEl  = get('[data-sku-enabled]');
-    const previewEl  = get('[data-sku-preview]');
-    const testEl     = get('[data-sku-test]');
-    const resultEl   = get('[data-sku-test-result]');
+    const previewEl   = rootEl.querySelector('[data-sku-preview]');
+    const testEl      = rootEl.querySelector('[data-sku-test]');
+    const resultEl    = rootEl.querySelector('[data-sku-test-result]');
+    const breakdown   = rootEl.querySelector('[data-sku-breakdown]');
 
     const refresh = () => {
-      const struct = _readSkuStructureFromInputs(rootEl);
-      const compiled = SkuValidator.compileStructureRegex(struct);
-      if (!struct?.enabled) {
+      const struct = SkuEngine.coerceToV2(_readSkuStructureFromInputs(rootEl));
+      const compiled = SkuEngine.compileSegmentsRegex(struct);
+      if (!struct.enabled) {
         previewEl.textContent = 'Validation disabled — only empty / NA placeholders count as undefined.';
         previewEl.style.color = 'var(--txt-4)';
       } else if (!compiled) {
-        previewEl.textContent = 'Add at least one prefix to compile the pattern.';
+        previewEl.textContent = 'Add at least one segment to compile the pattern.';
         previewEl.style.color = 'var(--warning)';
       } else {
         previewEl.textContent = compiled;
         previewEl.style.color = 'var(--txt-2)';
       }
-      // Re-run the test SKU
+
       const sku = testEl?.value || '';
       if (!sku.trim()) {
         resultEl.textContent = '—';
         resultEl.style.color = 'var(--txt-4)';
+        breakdown.textContent = '';
       } else {
-        const res = SkuValidator.validateSku(sku, compiled);
+        const res = SkuEngine.parseSku(sku, struct);
         if (res.valid) {
           resultEl.textContent = '✓ Valid';
           resultEl.style.color = 'var(--success)';
+          breakdown.innerHTML = res.segments.length
+            ? `Parsed: ${res.segments.map(s => `<strong>${Utils.escapeHtml(s.value)}</strong> <span style="color:var(--txt-4)">(${s.type})</span>`).join(' &middot; ')}`
+            : `Normalized: <code>${Utils.escapeHtml(res.normalized)}</code>`;
         } else {
           resultEl.textContent = res.reason === 'empty_or_placeholder' ? '✗ Placeholder' : '✗ Mismatch';
           resultEl.style.color = 'var(--error)';
+          breakdown.textContent = res.reason === 'empty_or_placeholder'
+            ? 'Empty / NA / #N/A placeholder.'
+            : 'Does not match the configured segment structure.';
         }
       }
     };
 
-    rootEl.querySelectorAll('input').forEach(el => el.addEventListener('input', refresh));
-    enabledEl?.addEventListener('change', refresh);
+    // Attach listeners on the section's inputs/buttons. Delegated so newly
+    // added segment rows pick them up automatically.
+    rootEl.addEventListener('input',   refresh);
+    rootEl.addEventListener('change',  refresh);
+
+    rootEl.addEventListener('click', (e) => {
+      const row = e.target.closest('.sku-seg-row');
+      if (e.target.matches('[data-sku-add-seg]')) {
+        _snapshotSegments(rootEl);
+        const segs = JSON.parse(rootEl.dataset.segments);
+        segs.push(_defaultSegmentForType('free_text'));
+        rootEl.dataset.segments = JSON.stringify(segs);
+        _renderSegmentList(rootEl);
+        refresh();
+        return;
+      }
+      if (!row) return;
+      if (e.target.matches('[data-seg-del]')) {
+        _snapshotSegments(rootEl);
+        const segs = JSON.parse(rootEl.dataset.segments).filter(s => s.id !== row.dataset.segId);
+        rootEl.dataset.segments = JSON.stringify(segs);
+        _renderSegmentList(rootEl); refresh();
+        return;
+      }
+      if (e.target.matches('[data-seg-up]') || e.target.matches('[data-seg-down]')) {
+        _snapshotSegments(rootEl);
+        const segs = JSON.parse(rootEl.dataset.segments);
+        const idx  = segs.findIndex(s => s.id === row.dataset.segId);
+        const delta = e.target.matches('[data-seg-up]') ? -1 : 1;
+        const tgt = idx + delta;
+        if (tgt < 0 || tgt >= segs.length) return;
+        [segs[idx], segs[tgt]] = [segs[tgt], segs[idx]];
+        rootEl.dataset.segments = JSON.stringify(segs);
+        _renderSegmentList(rootEl); refresh();
+      }
+    });
+
+    // Re-render segment row when its type changes (different detail control).
+    rootEl.addEventListener('change', (e) => {
+      if (!e.target.matches('[data-seg-type]')) return;
+      _snapshotSegments(rootEl);
+      _renderSegmentList(rootEl);
+      refresh();
+    });
+
+    _renderSegmentList(rootEl);
     refresh();
-  }
-
-  // Read just the raw fragment fields without normalization — used for the
-  // live preview where partial input is expected.
-  function _readSkuStructureFromInputs(rootEl) {
-    if (!rootEl) return null;
-    const get = sel => rootEl.querySelector(sel);
-    const prefixes = (get('[data-sku-prefixes]')?.value || '')
-      .split(',').map(p => p.trim()).filter(Boolean);
-    return {
-      enabled:      Boolean(get('[data-sku-enabled]')?.checked),
-      prefixes,
-      separator:    get('[data-sku-separator]')?.value ?? '-',
-      box_pattern:  get('[data-sku-box]')?.value      || '\\d+',
-      upc_pattern:  get('[data-sku-upc]')?.value      || '\\d+',
-      part_pattern: get('[data-sku-part]')?.value     || '[A-Z0-9-]+',
-    };
-  }
-
-  // Read + normalize for sending to the API. Returns null when section is
-  // disabled / empty so the server clears any stored config.
-  function _readSkuStructureSection(rootEl) {
-    const struct = _readSkuStructureFromInputs(rootEl);
-    if (!struct?.enabled || !struct.prefixes.length) return null;
-    return SkuValidator.normalizeStructureForStorage(struct);
   }
 
   /* ── Users: load ────────────────────────────────────────── */
@@ -819,12 +968,12 @@ const Settings = (() => {
   async function loadOrganizations() {
     const tbody = document.getElementById('orgs-tbody');
     if (!tbody) return;
-    tbody.innerHTML = Loading.tableRows(4, 4);
+    tbody.innerHTML = Loading.tableRows(5, 5);
     try {
       const orgs = await API.getOrganizations();
       _orgsCache  = orgs;
       if (!orgs.length) {
-        tbody.innerHTML = `<tr><td colspan="4">${Loading.empty('building-2', 'No organizations', 'Create the first organization to get started')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5">${Loading.empty('building-2', 'No organizations', 'Create the first organization to get started')}</td></tr>`;
         return;
       }
       const currentOrgId = Auth.getOrganization()?.organization_id;
@@ -833,12 +982,17 @@ const Settings = (() => {
         const oname    = Utils.escapeHtml(o.display_name);
         const isHere   = o.organization_id === currentOrgId;
         const isActive = o.is_active !== false;
+        const struct   = SkuEngine?.coerceToV2(o.sku_structure);
+        const skuCell  = struct?.enabled && struct.segments?.length
+          ? `<span style="font-family:monospace;font-size:11.5px;color:var(--txt-2)" title="${Utils.escapeHtml(struct.compiled || '')}">${Utils.escapeHtml(SkuEngine.summarizeStructure(struct))}</span>`
+          : `<span style="font-size:11px;color:var(--error);font-weight:600">Not configured</span>`;
         return `<tr data-org-id="${oid}"${!isActive ? ' class="user-row-inactive"' : ''}>
           <td>
             <span style="font-weight:600">${oname}</span>
             ${isHere ? '<span style="font-size:11px;color:var(--primary);margin-left:6px;font-weight:600">● current</span>' : ''}
           </td>
           <td style="font-size:12px;color:var(--txt-4);font-family:monospace">${Utils.escapeHtml(o.slug)}</td>
+          <td>${skuCell}</td>
           <td>${isActive ? Utils.badgeHtml('success', 'Active') : Utils.badgeHtml('gray', 'Deactivated')}</td>
           <td>
             <button class="btn btn-secondary btn-sm" data-action="edit-org" data-id="${oid}" title="Edit organization">
@@ -849,7 +1003,7 @@ const Settings = (() => {
       }).join('');
       Icons?.refresh?.();
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4">${Loading.error('Failed to load organizations')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5">${Loading.error('Failed to load organizations')}</td></tr>`;
       Notify.apiError(err);
     }
   }

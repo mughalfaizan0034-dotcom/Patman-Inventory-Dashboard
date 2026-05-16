@@ -125,24 +125,37 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo }) {
       FROM per_sku
     `;
 
-    // Raw order totals. "Unknown" units are not computed here — they're
-    // derived in JS as (units_sold_raw − sold_units_matched) using the
-    // per-SKU summary above (which already filters to inventory-matched
-    // effective SKUs).
+    // Raw order totals + the Unknown counts.
+    //   unknown_orders = COUNT(orders whose effective_sku has no inventory row)
+    //   unknown_units  = SUM(quantity_sold) over the same set
+    // Both come from one query that LEFT JOINs orders against the distinct
+    // inventory SKU set. unknownUnitsSold was previously derived in JS as
+    // (units_sold_raw − sold_units_matched); now sourced from SQL so a single
+    // computation drives both Orders-count and Units-sum surfaces.
     //
     // wrong_part_units = SUM(quantity_sold) for rows where the operator
     // shipped a SKU with a different part-UPC than the ordered SKU.
-    // Mirrors the WRONG_PART_SQL in ordersRepository (single source of
-    // truth lives in this query — keep them in lockstep).
     const ordersQuery = `
+      WITH inv_skus AS (
+        SELECT DISTINCT sku FROM ${invTable} WHERE organization_id = @organizationId
+      ),
+      o_eff AS (
+        SELECT
+          o.*,
+          ${effectiveSkuSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_sku' })} AS effective_sku
+        FROM ${ordTable} o
+        WHERE o.organization_id = @organizationId
+      )
       SELECT
-        COUNT(*)                                                       AS total_orders,
-        SUM(quantity_sold)                                             AS units_sold_raw,
-        SUM(IF(${wrongPartSql({ skuCol: 'sku', shippedCol: 'shipped_sku' })}, quantity_sold, 0)) AS wrong_part_units,
-        COUNT(DISTINCT CASE WHEN platform IS NOT NULL THEN platform END) AS active_platforms,
-        0                                                              AS ignored_orders
-      FROM ${ordTable}
-      WHERE organization_id = @organizationId
+        COUNT(*)                                                            AS total_orders,
+        SUM(o.quantity_sold)                                                AS units_sold_raw,
+        SUM(IF(${wrongPartSql({ skuCol: 'o.sku', shippedCol: 'o.shipped_sku' })}, o.quantity_sold, 0)) AS wrong_part_units,
+        COUNTIF(inv.sku IS NULL)                                            AS unknown_orders,
+        SUM(IF(inv.sku IS NULL, o.quantity_sold, 0))                        AS unknown_units,
+        COUNT(DISTINCT CASE WHEN o.platform IS NOT NULL THEN o.platform END) AS active_platforms,
+        0                                                                   AS ignored_orders
+      FROM o_eff o
+      LEFT JOIN inv_skus inv ON COALESCE(o.mapped_inventory_sku, o.effective_sku) = inv.sku
     `;
 
     try {
@@ -162,12 +175,13 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo }) {
       const phantomUnits           = Number(invRow.phantom_units            ?? 0);
       const physicalRemainingUnits = Number(invRow.physical_remaining_units ?? 0);
 
-      // Unknown UNITS = raw units sold − units that landed on a matched
-      // inventory SKU. Cheap derivation and exactly matches
+      // Unknown UNITS + ORDERS both come from the orders query LEFT JOIN.
+      // The unit total satisfies the identity
       //   Units Sold = Fulfilled + Phantom + Unknown
       // because Sold(matched) = Fulfilled + Phantom by the per-SKU pivot.
-      const unitsSoldRaw     = Number(ordRow.units_sold_raw ?? 0);
-      const unknownUnitsSold = Math.max(unitsSoldRaw - soldMatched, 0);
+      const unitsSoldRaw     = Number(ordRow.units_sold_raw  ?? 0);
+      const unknownUnitsSold = Number(ordRow.unknown_units   ?? 0);
+      const unknownOrders    = Number(ordRow.unknown_orders  ?? 0);
       const wrongPartUnits   = Number(ordRow.wrong_part_units ?? 0);
       const actualUnitsSold  = fulfilledUnits;
 
