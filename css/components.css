@@ -944,26 +944,9 @@
   justify-content: center;
   gap: 4px;
 }
-/* Eyebrow ("INVENTORY INTELLIGENCE" / "SALES INTELLIGENCE") is a centered
-   watermark — absolutely positioned at the visual center of the head, behind
-   the main metric (z-index 0). pointer-events:none so it never blocks clicks
-   on the underlying card. */
-.kpi-card-eyebrow {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--txt-4);
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  line-height: 1;
-  opacity: .55;
-  white-space: nowrap;
-  z-index: 0;
-}
+/* Eyebrow watermark removed — selector kept as a hard-hide so any
+   stale cached markup still suppresses the element. */
+.kpi-card-eyebrow { display: none; }
 .kpi-card-main {
   display: flex;
   align-items: baseline;
@@ -1043,18 +1026,18 @@
 }
 
 .kpi-sub-label {
-  /* Labels are auxiliary context — keep them small and quiet so the
-     numeric values dominate visually. */
-  font-size: 9.5px;
+  /* Labels are auxiliary context — kept tiny and quiet so the numeric
+     values dominate visually. */
+  font-size: 8.5px;
   font-weight: 600;
   color: var(--txt-4);
   text-transform: uppercase;
-  letter-spacing: .04em;
-  line-height: 1.2;
+  letter-spacing: .03em;
+  line-height: 1.15;
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-height: 22px;
+  gap: 4px;
+  min-height: 20px;
 }
 .kpi-sub-value {
   /* Values are the main signal — slightly larger and bolder than before
@@ -1096,8 +1079,7 @@
   .kpi-card-head-icon,
   .kpi-card-arrow   { width: 34px; height: 34px; }
   .kpi-sub-value { font-size: 19px; }
-  .kpi-sub-label { font-size: 9px; }
-  .kpi-card-eyebrow { font-size: 10px; letter-spacing: .1em; }
+  .kpi-sub-label { font-size: 8px; }
 }
 
 /* Skeleton pulse while loading */

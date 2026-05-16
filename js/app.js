@@ -113,8 +113,20 @@ const Settings = (() => {
     return `${opt.base}+`;
   }
 
+  // Per-segment "Separator before" options. '' = concatenate directly (no
+  // separator). The first segment ignores this field — there's nothing
+  // preceding it. Listed in the dropdown shown on segment rows 2..N.
+  const SEPARATOR_OPTIONS = Object.freeze([
+    { value: '-',  label: 'Hyphen ( - )'      },
+    { value: '_',  label: 'Underscore ( _ )'  },
+    { value: '.',  label: 'Dot ( . )'         },
+    { value: '/',  label: 'Slash ( / )'       },
+    { value: ' ',  label: 'Space ( ␣ )'       },
+    { value: '',   label: 'None (concatenate)' },
+  ]);
+
   function _defaultSegmentForType(type) {
-    const seg = { id: `seg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, type, required: true, values: null, pattern: null, allow_attached_box: false };
+    const seg = { id: `seg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, type, required: true, values: null, pattern: null, prefix_separator: '-', allow_attached_box: false };
     if (type === 'identifier')  { seg.values = ['ARA']; seg.allow_attached_box = true; }
     if (type === 'part_number') { seg.pattern = '[A-Z0-9]+'; }
     if (type === 'upc')         { seg.pattern = '\\d+';     }
@@ -185,9 +197,28 @@ const Settings = (() => {
         </div>`;
     }
 
+    // Per-segment "Separator before" — only shown for non-first segments.
+    // Identifier-attached-box still makes the identifier→box gap optional,
+    // but the literal character chosen here is what appears in valid SKUs.
+    let separatorRow = '';
+    if (idx > 0) {
+      const currentSep = typeof seg.prefix_separator === 'string' ? seg.prefix_separator : '-';
+      const sepOpts = SEPARATOR_OPTIONS.map(o =>
+        `<option value="${Utils.escapeHtml(o.value)}"${o.value === currentSep ? ' selected' : ''}>${Utils.escapeHtml(o.label)}</option>`
+      ).join('');
+      separatorRow = `
+        <div data-seg-separator-row
+             style="grid-column:1 / -1;display:flex;align-items:center;gap:8px;margin:-2px 0 4px;padding:6px 10px;background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--r-sm)">
+          <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-4)">Separator before</span>
+          <select class="form-select" data-seg-separator style="flex:1;max-width:220px;font-size:12px;padding:5px 8px">${sepOpts}</select>
+          <span style="font-size:11px;color:var(--txt-4)">Choose how this segment connects to the previous one.</span>
+        </div>`;
+    }
+
     return `
       <div class="sku-seg-row" data-seg-id="${Utils.escapeHtml(seg.id)}"
            style="display:grid;grid-template-columns:24px 130px 1fr auto;gap:8px;align-items:start;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)">
+        ${separatorRow}
         <div data-seg-index style="font-size:11px;font-weight:700;color:var(--txt-4);padding-top:8px;text-align:center">${idx + 1}</div>
         <div>
           <select class="form-select" data-seg-type style="font-size:12px;padding:6px 8px">${typeOpts}</select>
@@ -205,39 +236,61 @@ const Settings = (() => {
       </div>`;
   }
 
+  // Resolve the literal separator that goes BEFORE segment[i]. The first
+  // segment never has one. Per-segment prefix_separator wins; structure-level
+  // separators[0] is the fallback for legacy stored configs that pre-date the
+  // per-segment field.
+  function _resolveSepBefore(structure, i) {
+    if (i <= 0) return '';
+    const seg = structure.segments[i];
+    if (typeof seg?.prefix_separator === 'string') return seg.prefix_separator;
+    const legacy = (structure.separators || []).filter(s => s !== '');
+    return legacy[0] || '-';
+  }
+
   // Build the friendly "ARA · {Box} · {Part Number} · {UPC}" template line.
+  // Each transition uses its own separator so admins can preview mixed shapes
+  // like "ARA1_12345-998877" or fully concatenated SKUs like "ARA112345998877".
   function _buildStructureTemplate(structure) {
     const segs = Array.isArray(structure.segments) ? structure.segments : [];
     if (!segs.length) return '';
-    const seps = (structure.separators || []).filter(s => s !== '');
-    const sep  = seps[0] || '';
-    return segs.map(seg => {
-      const open = seg.required === false ? '[' : '';
+    return segs.map((seg, i) => {
+      const open  = seg.required === false ? '[' : '';
       const close = seg.required === false ? ']' : '';
+      const sep   = i === 0 ? '' : _resolveSepBefore(structure, i);
+      const sepDisplay = sep === '' ? '' : ` ${sep} `;
+      let label;
       if (seg.type === 'identifier') {
         const vals = (seg.values || []).filter(Boolean);
-        if (vals.length === 1) return `${open}${vals[0]}${close}`;
-        if (vals.length > 1)   return `${open}(${vals.join('|')})${close}`;
-        return `${open}${SEGMENT_TEMPLATE_PLACEHOLDER.identifier}${close}`;
+        if (vals.length === 1)      label = vals[0];
+        else if (vals.length > 1)   label = `(${vals.join('|')})`;
+        else                        label = SEGMENT_TEMPLATE_PLACEHOLDER.identifier;
+      } else {
+        label = SEGMENT_TEMPLATE_PLACEHOLDER[seg.type] || '{?}';
       }
-      return `${open}${SEGMENT_TEMPLATE_PLACEHOLDER[seg.type] || '{?}'}${close}`;
-    }).join(sep ? ` ${sep} ` : ' · ');
+      return `${sepDisplay}${open}${label}${close}`;
+    }).join('');
   }
 
-  // Build a concrete example SKU: "ARA1-12345-998877"-style. Identifier uses
-  // its first allowed value; other segments use SEGMENT_SAMPLE_VALUE defaults.
+  // Build a concrete example SKU using each segment's literal separator and a
+  // sensible sample value per segment type.
   function _buildStructureSample(structure) {
     const segs = Array.isArray(structure.segments) ? structure.segments : [];
     if (!segs.length) return '';
-    const seps = (structure.separators || []).filter(s => s !== '');
-    const sep  = seps[0] || '';
-    return segs.map(seg => {
+    return segs.map((seg, i) => {
+      const sep = i === 0 ? '' : _resolveSepBefore(structure, i);
+      let value;
       if (seg.type === 'identifier') {
         const vals = (seg.values || []).filter(Boolean);
-        return vals[0] || SEGMENT_SAMPLE_VALUE.identifier;
+        value = vals[0] || SEGMENT_SAMPLE_VALUE.identifier;
+      } else {
+        value = SEGMENT_SAMPLE_VALUE[seg.type] || 'X';
       }
-      return SEGMENT_SAMPLE_VALUE[seg.type] || 'X';
-    }).join(sep);
+      // Suppress sep when allow_attached_box collapses identifier→box visually.
+      const prev = i > 0 ? segs[i - 1] : null;
+      const attached = prev?.type === 'identifier' && prev.allow_attached_box && seg.type === 'box';
+      return `${attached ? '' : sep}${value}`;
+    }).join('');
   }
 
   function _renderSkuStructureSection(struct, { required = false } = {}) {
@@ -246,7 +299,6 @@ const Settings = (() => {
     // start with a sensible template so the admin sees concrete segments.
     const useStruct = (v2.segments?.length || !required) ? v2 : _defaultStructure();
     const segments  = useStruct.segments?.length ? useStruct.segments : _defaultStructure().segments;
-    const separators = (useStruct.separators || ['-']).map(s => s === '' ? '(none)' : s).join(', ');
 
     return `
       <div class="form-group" data-sku-structure
@@ -265,12 +317,9 @@ const Settings = (() => {
           Add segments in order. Any inventory row whose SKU does not match counts as <strong>Undefined</strong> across the whole app.
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;margin-bottom:8px">
-          <div>
-            <label class="form-label" style="font-size:11px;font-weight:600">Allowed separators</label>
-            <input class="form-input" data-sku-separators value="${Utils.escapeHtml(separators)}"
-                   placeholder="-, _, (none)" style="font-family:monospace">
-            <div class="form-hint" style="font-size:10.5px">Comma-separated. <code>(none)</code> makes separators optional between segments.</div>
+        <div style="display:grid;grid-template-columns:1fr 200px;gap:8px;margin-bottom:8px">
+          <div class="form-hint" style="font-size:11px;line-height:1.55;padding:7px 0">
+            Each segment below has its own <strong>Separator before</strong> control — pick a hyphen, underscore, dot, or <em>None</em> to concatenate. Mix and match to build any SKU shape.
           </div>
           <div>
             <label class="form-label" style="font-size:11px;font-weight:600">Case</label>
@@ -305,38 +354,51 @@ const Settings = (() => {
       </div>`;
   }
 
-  // Parse the separator-input string into the structure separators array.
-  // "(none)" / "none" / "" → '' (separator optional).
-  function _parseSeparatorsInput(raw) {
-    return String(raw || '')
-      .split(',')
-      .map(s => s.trim())
-      .map(s => (s.toLowerCase() === '(none)' || s.toLowerCase() === 'none') ? '' : s)
-      .filter((s, i, arr) => s !== undefined && arr.indexOf(s) === i);
-  }
-
   // Read just the raw shape — used for the live preview while editing.
+  // Each segment row carries its own prefix_separator dropdown (rows 2..N);
+  // the per-type detail area is either the friendly Format/Length pair or
+  // a custom regex textbox.
   function _readSkuStructureFromInputs(rootEl) {
     if (!rootEl) return null;
     const get = sel => rootEl.querySelector(sel);
-    const separators = _parseSeparatorsInput(get('[data-sku-separators]')?.value);
-    const enabled    = Boolean(get('[data-sku-enabled]')?.checked);
-    const caseMode   = get('[data-sku-case]')?.value || 'ci';
-    const segments = Array.from(rootEl.querySelectorAll('.sku-seg-row')).map(row => {
-      const id   = row.dataset.segId;
-      const type = row.querySelector('[data-seg-type]').value;
+    const enabled  = Boolean(get('[data-sku-enabled]')?.checked);
+    const caseMode = get('[data-sku-case]')?.value || 'ci';
+
+    const segments = Array.from(rootEl.querySelectorAll('.sku-seg-row')).map((row, idx) => {
+      const id       = row.dataset.segId;
+      const type     = row.querySelector('[data-seg-type]').value;
       const required = Boolean(row.querySelector('[data-seg-required]')?.checked);
       const seg = { id, type, required, values: null, pattern: null, allow_attached_box: false };
+
+      // prefix_separator only applies from segment 2 onward. The dropdown's
+      // value is the literal char (including '' for "concatenate").
+      if (idx > 0) {
+        const sepEl = row.querySelector('[data-seg-separator]');
+        seg.prefix_separator = sepEl ? sepEl.value : '-';
+      }
+
       if (type === 'identifier') {
         const valStr = row.querySelector('[data-seg-values]')?.value || '';
         seg.values = valStr.split(',').map(v => v.trim()).filter(Boolean);
         seg.allow_attached_box = Boolean(row.querySelector('[data-seg-attach]')?.checked);
-      } else if (type !== 'wildcard') {
-        seg.pattern = row.querySelector('[data-seg-pattern]')?.value || '';
+      } else if (type === 'wildcard') {
+        seg.pattern = null;
+      } else {
+        // Friendly Format/Length pair → rebuild the regex fragment. Custom
+        // route keeps whatever the admin typed in the raw pattern field.
+        const format = row.querySelector('[data-seg-format]')?.value || 'custom';
+        const min    = row.querySelector('[data-seg-min]')?.value || '';
+        const max    = row.querySelector('[data-seg-max]')?.value || '';
+        if (format === 'custom') {
+          seg.pattern = row.querySelector('[data-seg-pattern]')?.value || '';
+        } else {
+          seg.pattern = _patternFromFormat(format, min, max);
+        }
       }
       return seg;
     });
-    return { version: 2, enabled, case_insensitive: caseMode === 'ci', separators: separators.length ? separators : ['-'], segments };
+
+    return { version: 2, enabled, case_insensitive: caseMode === 'ci', segments };
   }
 
   // Read + normalize for sending to the API. Returns null when the section
@@ -364,25 +426,42 @@ const Settings = (() => {
 
   function _wireSkuStructureSection(rootEl) {
     if (!rootEl) return;
-    const previewEl   = rootEl.querySelector('[data-sku-preview]');
-    const testEl      = rootEl.querySelector('[data-sku-test]');
-    const resultEl    = rootEl.querySelector('[data-sku-test-result]');
-    const breakdown   = rootEl.querySelector('[data-sku-breakdown]');
+    const previewEl  = rootEl.querySelector('[data-sku-preview]');
+    const templateEl = rootEl.querySelector('[data-sku-template]');
+    const sampleEl   = rootEl.querySelector('[data-sku-sample]');
+    const testEl     = rootEl.querySelector('[data-sku-test]');
+    const resultEl   = rootEl.querySelector('[data-sku-test-result]');
+    const breakdown  = rootEl.querySelector('[data-sku-breakdown]');
 
     const refresh = () => {
       const struct = SkuEngine.coerceToV2(_readSkuStructureFromInputs(rootEl));
       const compiled = SkuEngine.compileSegmentsRegex(struct);
+
+      // Friendly template (top, prominent).
       if (!struct.enabled) {
-        previewEl.textContent = 'Validation disabled — only empty / NA placeholders count as undefined.';
-        previewEl.style.color = 'var(--txt-4)';
-      } else if (!compiled) {
-        previewEl.textContent = 'Add at least one segment to compile the pattern.';
-        previewEl.style.color = 'var(--warning)';
+        templateEl.textContent = 'Validation disabled';
+        templateEl.style.color = 'var(--txt-4)';
+        sampleEl.textContent   = '—';
+      } else if (!struct.segments?.length) {
+        templateEl.textContent = 'Add at least one segment.';
+        templateEl.style.color = 'var(--warning)';
+        sampleEl.textContent   = '—';
       } else {
-        previewEl.textContent = compiled;
-        previewEl.style.color = 'var(--txt-2)';
+        templateEl.textContent = _buildStructureTemplate(struct);
+        templateEl.style.color = 'var(--primary-text)';
+        sampleEl.textContent   = _buildStructureSample(struct);
       }
 
+      // Compiled regex (collapsed by default — power-user info only).
+      if (!compiled) {
+        previewEl.textContent = 'No regex compiled (structure incomplete or disabled).';
+        previewEl.style.color = 'var(--txt-4)';
+      } else {
+        previewEl.textContent = compiled;
+        previewEl.style.color = 'var(--txt-4)';
+      }
+
+      // Test-SKU result and parsed breakdown.
       const sku = testEl?.value || '';
       if (!sku.trim()) {
         resultEl.textContent = '—';
@@ -394,17 +473,28 @@ const Settings = (() => {
           resultEl.textContent = '✓ Valid';
           resultEl.style.color = 'var(--success)';
           breakdown.innerHTML = res.segments.length
-            ? `Parsed: ${res.segments.map(s => `<strong>${Utils.escapeHtml(s.value)}</strong> <span style="color:var(--txt-4)">(${s.type})</span>`).join(' &middot; ')}`
+            ? `Parsed: ${res.segments.map(s => `<strong>${Utils.escapeHtml(s.value)}</strong> <span style="color:var(--txt-4)">(${SEGMENT_LABEL[s.type] || s.type})</span>`).join(' &middot; ')}`
             : `Normalized: <code>${Utils.escapeHtml(res.normalized)}</code>`;
         } else {
           resultEl.textContent = res.reason === 'empty_or_placeholder' ? '✗ Placeholder' : '✗ Mismatch';
           resultEl.style.color = 'var(--error)';
           breakdown.textContent = res.reason === 'empty_or_placeholder'
             ? 'Empty / NA / #N/A placeholder.'
-            : 'Does not match the configured segment structure.';
+            : 'Does not match the configured SKU structure.';
         }
       }
     };
+
+    // Toggle the custom-regex textbox when the Format dropdown changes.
+    // Inline so we don't have to re-render the whole segment row (which would
+    // lose focus mid-edit).
+    rootEl.addEventListener('change', (e) => {
+      if (!e.target.matches('[data-seg-format]')) return;
+      const row = e.target.closest('.sku-seg-row');
+      if (!row) return;
+      const customEl = row.querySelector('[data-seg-pattern]');
+      if (customEl) customEl.style.display = e.target.value === 'custom' ? '' : 'none';
+    });
 
     // Attach listeners on the section's inputs/buttons. Delegated so newly
     // added segment rows pick them up automatically.

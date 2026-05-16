@@ -217,16 +217,34 @@ function _segmentBody(seg) {
 /**
  * Build the separator regex piece between two segments.
  *
+ * Resolution rules (in priority order):
+ *   1. If nextSeg.prefix_separator is defined: use it literally. Empty string
+ *      means "no separator" (segments concatenate directly).
+ *   2. Otherwise fall back to structure.separators (legacy v2 behavior — any
+ *      one of the listed chars is allowed; "" in the list makes it optional).
+ *
  * Special-cased: when prevSeg is an identifier with allow_attached_box AND
- * nextSeg is "box", the separator is ALWAYS treated as optional regardless
- * of structure.separators — this is the ARA1 ≡ ARA-1 collapse rule.
+ * nextSeg is "box", the separator is forced optional regardless of the rule
+ * above — that's the ARA1 ≡ ARA-1 collapse the admin opted into.
  */
 function _separatorBetween(prevSeg, nextSeg, structure) {
-  const seps    = structure.separators;
-  const allowed = seps.filter(s => s !== '');
-  const allowEmpty = seps.includes('') || (prevSeg?.type === 'identifier' && prevSeg.allow_attached_box && nextSeg?.type === 'box');
+  const attachedBoxRelax = prevSeg?.type === 'identifier' && prevSeg.allow_attached_box && nextSeg?.type === 'box';
 
-  if (!allowed.length) return ''; // separators === [""]  → segments concatenate
+  // Per-segment field takes priority. typeof check distinguishes "explicitly
+  // empty" from "absent" — the former is a positive instruction to concatenate.
+  if (typeof nextSeg.prefix_separator === 'string') {
+    const sep = nextSeg.prefix_separator;
+    if (sep === '') return attachedBoxRelax ? '' : '';
+    const lit = escapeRegexLiteral(sep);
+    return attachedBoxRelax ? `(?:${lit})?` : lit;
+  }
+
+  // Legacy: structure-level separator list.
+  const seps    = Array.isArray(structure.separators) ? structure.separators : ['-'];
+  const allowed = seps.filter(s => s !== '');
+  const allowEmpty = seps.includes('') || attachedBoxRelax;
+
+  if (!allowed.length) return '';
   const charClass = allowed.length === 1
     ? escapeRegexLiteral(allowed[0])
     : `[${allowed.map(escapeRegexLiteral).join('')}]`;

@@ -74,6 +74,9 @@ const SkuEngine = (() => {
         ? seg.values.map(v => String(v ?? '').trim()).filter(Boolean)
         : null,
       pattern:            typeof seg.pattern === 'string' && seg.pattern ? seg.pattern : null,
+      // Per-segment "separator before". '' = no separator, undefined = fall
+      // back to structure.separators[0] in _separatorBetween (legacy data).
+      prefix_separator:   typeof seg.prefix_separator === 'string' ? seg.prefix_separator : undefined,
       allow_attached_box: type === 'identifier' && seg.allow_attached_box === true,
     };
   }
@@ -144,9 +147,21 @@ const SkuEngine = (() => {
   }
 
   function _separatorBetween(prevSeg, nextSeg, structure) {
-    const seps    = structure.separators;
+    const attachedBoxRelax = prevSeg?.type === 'identifier' && prevSeg.allow_attached_box && nextSeg?.type === 'box';
+
+    // Per-segment field takes priority. typeof check distinguishes "explicitly
+    // empty" (= concatenate) from "absent" (= fall through to legacy global).
+    if (typeof nextSeg.prefix_separator === 'string') {
+      const sep = nextSeg.prefix_separator;
+      if (sep === '') return '';
+      const lit = escapeRegexLiteral(sep);
+      return attachedBoxRelax ? `(?:${lit})?` : lit;
+    }
+
+    // Legacy: structure-level separator list.
+    const seps    = Array.isArray(structure.separators) ? structure.separators : ['-'];
     const allowed = seps.filter(s => s !== '');
-    const allowEmpty = seps.includes('') || (prevSeg?.type === 'identifier' && prevSeg.allow_attached_box && nextSeg?.type === 'box');
+    const allowEmpty = seps.includes('') || attachedBoxRelax;
     if (!allowed.length) return '';
     const charClass = allowed.length === 1
       ? escapeRegexLiteral(allowed[0])
@@ -228,17 +243,22 @@ const SkuEngine = (() => {
   }
 
   // Friendly one-line summary of a structure for the Organizations table
-  // column. Returns the segment-type sequence with separators, e.g.
-  //   "ARA · box · upc · part_number"
+  // column. Uses each segment's prefix_separator (falling back to legacy
+  // structure.separators for older stored configs). Renders identifier
+  // values inline so admins can see the pattern at a glance, e.g.
+  //   "ARA - box - part_number - upc"
   function summarizeStructure(structure) {
     const s = coerceToV2(structure);
     if (!s.enabled || !s.segments?.length) return '';
-    const sepChars = (s.separators || []).filter(c => c !== '');
-    const sep = sepChars[0] || '';
-    return s.segments.map(seg => {
-      if (seg.type === 'identifier' && seg.values?.length) return seg.values.join('|');
-      return seg.type.replace('_', ' ');
-    }).join(sep ? ` ${sep} ` : ' · ');
+    const legacySep = (s.separators || []).filter(c => c !== '')[0] || '';
+    return s.segments.map((seg, i) => {
+      const label = (seg.type === 'identifier' && seg.values?.length)
+        ? seg.values.join('|')
+        : seg.type.replace('_', ' ');
+      if (i === 0) return label;
+      const sep = typeof seg.prefix_separator === 'string' ? seg.prefix_separator : legacySep;
+      return sep ? `${sep} ${label}` : label;
+    }).join(' ');
   }
 
   return {
