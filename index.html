@@ -76,15 +76,17 @@
   <!-- â”€â”€ App Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <div id="app-shell" style="display:none">
 
+    <!-- Sidebar backdrop (mobile offcanvas) -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-logo">P</div>
-        <div class="sidebar-brand-text">
-          <div class="sidebar-brand-name">Patman</div>
-          <div class="sidebar-brand-sub">Inventory System</div>
-        </div>
-        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar">
+        <button class="sidebar-logo-btn" id="sidebar-logo-btn" title="Expand sidebar" aria-label="Expand sidebar" type="button">
+          <span class="sidebar-logo">P</span>
+        </button>
+        <div class="sidebar-menu-label">Menu</div>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar" type="button">
           <i data-lucide="menu" class="icon" style="width:16px;height:16px"></i>
         </button>
       </div>
@@ -133,6 +135,9 @@
 
       <!-- Topbar -->
       <header class="topbar">
+        <button class="topbar-menu-btn" id="topbar-menu-btn" title="Open menu" aria-label="Open menu" type="button">
+          <i data-lucide="menu" class="icon" style="width:18px;height:18px"></i>
+        </button>
         <div id="topbar-title" class="topbar-title">Dashboard</div>
         <div class="topbar-actions">
           <!-- Org switcher â€” hidden when user has only one org -->
@@ -401,7 +406,7 @@
 
           <!-- Sticky top section: 3-col grid (Inventory | Orders | Guide) -->
           <div class="uploads-top">
-            <div style="display:grid;grid-template-columns:3fr 3fr 4fr;gap:14px;align-items:stretch">
+            <div class="uploads-top-grid">
 
               <!-- Inventory upload card -->
               <div class="upload-card">

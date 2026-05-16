@@ -242,12 +242,16 @@
 .nav-item.active .nav-icon { opacity: 1; }
 
 /* ── Collapsed sidebar ──────────────────────────────────────── */
-body.sidebar-collapsed .sidebar         { width: 56px; min-width: 56px; }
-body.sidebar-collapsed .main-wrapper   { margin-left: 56px; }
+body.sidebar-collapsed .sidebar         { width: 64px; min-width: 64px; }
+body.sidebar-collapsed .main-wrapper   { margin-left: 64px; }
 
-body.sidebar-collapsed .sidebar-header { padding: 14px 11px; justify-content: center; gap: 0; }
-body.sidebar-collapsed .sidebar-brand-text { opacity: 0; max-width: 0; }
-body.sidebar-collapsed .sidebar-toggle { margin-left: 0; }
+/* In collapsed state, the "Menu" label and toggle button hide while the
+   centered logo button takes their place. The logo doubles as a click
+   target to re-expand the sidebar. */
+body.sidebar-collapsed .sidebar-header     { padding: 13px 0; justify-content: center; gap: 0; }
+body.sidebar-collapsed .sidebar-menu-label { opacity: 0; max-width: 0; }
+body.sidebar-collapsed .sidebar-toggle     { display: none; }
+body.sidebar-collapsed .sidebar-logo-btn   { display: flex; }
 
 body.sidebar-collapsed .sidebar-nav    { padding: 10px 4px; }
 body.sidebar-collapsed .nav-item       { justify-content: center; padding: 9px 0; }

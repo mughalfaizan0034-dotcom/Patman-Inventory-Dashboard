@@ -26,6 +26,42 @@ export function normalizeBoxNumber(value) {
   return m ? m[1] : str;
 }
 
+// Resolve operator-supplied "shipped SKU" into one of two storage columns:
+//
+//   shipped_from_box     — bare box digits, used to rebuild the effective SKU
+//                          with the ORIGINAL part-UPC suffix (same-part override)
+//   shipped_sku_override — the full alternate SKU, used verbatim
+//                          (wrong-part override: different part and/or UPC)
+//
+// Detection (operator intent):
+//   - Empty / whitespace             → both null
+//   - Bare digits ("20") / "ARA20"   → box-only path
+//   - Full SKU "ARA{n}-{part}-{upc}" → override path (status derivation happens
+//                                      in SQL by comparing the part-UPC suffix
+//                                      to the original SKU)
+//   - Anything else                  → preserved in shipped_from_box for
+//                                      legacy compatibility
+export function resolveShippedTarget(value) {
+  const str = safeString(value);
+  if (!str) return { shipped_from_box: null, shipped_sku_override: null };
+
+  // Bare box digits or "ARA20" with no suffix → box-only override.
+  const boxOnly = str.match(/^ARA(\d+)$/i);
+  if (boxOnly)             return { shipped_from_box: boxOnly[1],    shipped_sku_override: null };
+  if (/^\d+$/.test(str))   return { shipped_from_box: str,           shipped_sku_override: null };
+
+  // Full ARA SKU (has a part-UPC suffix) → store as full-SKU override.
+  // Whether this counts as "wrong part" vs "same part different box" is
+  // decided in SQL at query time by comparing part-UPC suffixes against
+  // the original ordered sku — we don't need to know that here.
+  if (/^ARA\d+-.+-.+$/i.test(str)) {
+    return { shipped_from_box: null, shipped_sku_override: str };
+  }
+
+  // Unknown form (e.g. "BX-001"). Preserve in legacy box column.
+  return { shipped_from_box: str, shipped_sku_override: null };
+}
+
 export function parsePositiveInt(raw, field, rowNum) {
   const trimmed = String(raw ?? '').trim();
   if (!trimmed) return { error: { row: rowNum, field, value: raw, reason: `${field} is required` } };
