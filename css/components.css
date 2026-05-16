@@ -1043,25 +1043,29 @@
 }
 
 .kpi-sub-label {
-  font-size: 10.5px;
+  /* Labels are auxiliary context — keep them small and quiet so the
+     numeric values dominate visually. */
+  font-size: 9.5px;
   font-weight: 600;
   color: var(--txt-4);
   text-transform: uppercase;
-  letter-spacing: .05em;
-  line-height: 1.25;
+  letter-spacing: .04em;
+  line-height: 1.2;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 26px;
+  gap: 5px;
+  min-height: 22px;
 }
 .kpi-sub-value {
-  font-size: 19px;
+  /* Values are the main signal — slightly larger and bolder than before
+     to widen the contrast with the down-sized labels above. */
+  font-size: 22px;
   font-weight: 700;
   color: var(--txt-1);
   font-family: var(--font-title);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
-  letter-spacing: -.01em;
+  letter-spacing: -.015em;
 }
 .kpi-sub-value.green  { color: #16a34a; }
 .kpi-sub-value.orange { color: #c2410c; }
@@ -1091,7 +1095,8 @@
   .kpi-card-label { font-size: 13px; }
   .kpi-card-head-icon,
   .kpi-card-arrow   { width: 34px; height: 34px; }
-  .kpi-sub-value { font-size: 17px; }
+  .kpi-sub-value { font-size: 19px; }
+  .kpi-sub-label { font-size: 9px; }
   .kpi-card-eyebrow { font-size: 10px; letter-spacing: .1em; }
 }
 
