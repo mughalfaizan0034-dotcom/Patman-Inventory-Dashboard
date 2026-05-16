@@ -1497,10 +1497,23 @@ const App = (() => {
     const mobileBtn   = document.getElementById('topbar-menu-btn');
     const backdrop    = document.getElementById('sidebar-backdrop');
     const MOBILE_BREAKPOINT = 768;
+    // Tablet / narrow-desktop band: default to icon-only so the sidebar
+    // doesn't eat half the canvas. Above this the user's stored preference
+    // (or the expanded default) takes over.
+    const TABLET_BREAKPOINT = 1100;
 
     const isMobile = () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+    const isTablet = () => window.matchMedia(`(max-width: ${TABLET_BREAKPOINT}px)`).matches
+                        && !isMobile();
 
-    if (localStorage.getItem(STORAGE_KEY) === '1') {
+    // Initial state:
+    //   • mobile  → leave sidebar expanded markup (off-canvas drawer handles visibility)
+    //   • tablet  → auto-collapse if user hasn't explicitly stored a preference
+    //   • desktop → honor stored preference
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === '1') {
+      document.body.classList.add('sidebar-collapsed');
+    } else if (stored === null && isTablet()) {
       document.body.classList.add('sidebar-collapsed');
     }
 
