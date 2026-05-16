@@ -38,7 +38,7 @@ const BoxLookup = (() => {
             <div style="font-size:22px;font-weight:700;color:var(--txt-2);line-height:1">${Utils.formatNumber(totalInitial)}</div>
           </div>
           <div style="padding:12px 16px;border-right:1px solid var(--border)">
-            <div style="font-size:10.5px;font-weight:600;color:var(--txt-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Actual Sold</div>
+            <div style="font-size:10.5px;font-weight:600;color:var(--txt-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Fulfilled</div>
             <div style="font-size:22px;font-weight:700;color:var(--txt-2);line-height:1">${Utils.formatNumber(totalFulfilled)}</div>
           </div>
           <div style="padding:12px 16px;border-right:1px solid var(--border)">
@@ -109,7 +109,7 @@ const BoxLookup = (() => {
               <tr>
                 <th>Box #</th>
                 <th class="num">Initial</th>
-                <th class="num">Actual Sold</th>
+                <th class="num">Fulfilled</th>
                 <th class="num">Phantom</th>
                 <th class="num">Remaining</th>
                 <th>Status</th>
@@ -309,7 +309,7 @@ const InventoryList = (() => {
   let _sortDir       = 'desc';
   let _statusFilter  = 'all';
 
-  const COLS = ['UID', 'SKU', 'Box #', 'Part #', 'UPC', 'Initial', 'Actual Sold', 'Phantom', 'Remaining', 'Date Added', 'Notes', ''];
+  const COLS = ['UID', 'SKU', 'Box #', 'Part #', 'UPC', 'Initial', 'Fulfilled', 'Phantom', 'Remaining', 'Date Added', 'Notes', ''];
 
   /* ── Undefined SKU check ─────────────────────────────────── */
   // Mirror of server/src/utils/inventoryPatterns.js. Keep in sync.

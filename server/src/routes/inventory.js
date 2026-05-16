@@ -57,7 +57,7 @@ export async function inventoryRoutes(fastify, { inventoryService, activityServi
       });
 
       const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const header = 'UID,SKU,Box #,Part #,UPC,Initial Qty,Actual Sold,Phantom Units,Actual Remaining,Date Added,Notes';
+      const header = 'UID,SKU,Box #,Part #,UPC,Initial Qty,Fulfilled,Phantom Units,Actual Remaining,Date Added,Notes';
       const lines  = rows.map(r => [
         r.row_uid,
         r.sku, r.box_number, r.part_number, r.upc,
