@@ -88,6 +88,19 @@
 .data-table tbody tr.row-wrong-part:hover   { background: rgba(220, 38, 38, 0.12); }
 .data-table tbody tr.row-wrong-part td:first-child { border-left: 3px solid #b91c1c; }
 
+/* SKU View — one row per SKU, click to expand raw rows below */
+.data-table tbody tr.sku-row { cursor: pointer; transition: background .12s; }
+.data-table tbody tr.sku-row:hover { background: rgba(37, 99, 235, .04); }
+.data-table tbody tr.sku-row--phantom        { background: rgba(220, 38, 38, .05); }
+.data-table tbody tr.sku-row--phantom:hover  { background: rgba(220, 38, 38, .09); }
+.data-table tbody tr.sku-row--phantom td:first-child { border-left: 3px solid #dc2626; }
+.data-table tbody tr.sku-row--oos td:first-child     { border-left: 3px solid #94a3b8; }
+.data-table tbody tr.sku-row--undef           { background: rgba(234, 179, 8, .06); }
+.data-table tbody tr.sku-row--undef:hover     { background: rgba(234, 179, 8, .10); }
+.data-table tbody tr.sku-row--undef td:first-child   { border-left: 3px solid #ca8a04; }
+.data-table tbody tr.sku-drill-row td { padding: 0 }
+.data-table tbody tr.sku-drill-row:hover { background: inherit; }
+
 /* ── Compact card table (inside card with no extra border) ─── */
 .card-table .data-table thead th:first-child,
 .card-table .data-table tbody td:first-child { padding-left: 20px; }

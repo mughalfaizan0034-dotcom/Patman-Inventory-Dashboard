@@ -371,87 +371,183 @@ const InventoryList = (() => {
     });
   }
 
-  /* ── Render ─────────────────────────────────────────────── */
+  /* ── Render: one row per SKU ────────────────────────────── */
   function _renderTable(items, total) {
     _total = total || 0;
-    const tbody   = document.getElementById('inventory-tbody');
-    const info    = document.getElementById('inventory-info');
-    const canEdit = Auth.hasRole('manager');
+    const tbody = document.getElementById('inventory-tbody');
+    const info  = document.getElementById('inventory-info');
     if (!tbody) return;
 
     if (!items || !items.length) {
-      tbody.innerHTML = `<tr><td colspan="${COLS.length}" style="padding:0">${Loading.empty('package', 'No inventory records', 'Upload inventory data to get started')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${COL_COUNT}" style="padding:0">${Loading.empty('package', 'No SKUs found', 'Upload inventory data or adjust your filters')}</td></tr>`;
       if (info) info.textContent = '';
+      Pagination.render('inventory-pagination', 1, 0, () => {});
       return;
     }
 
     tbody.innerHTML = items.map(item => {
-      const qty       = Number(item.quantity        ?? 0);
-      const remaining = Number(item.remaining_stock ?? qty);
-      const remColor  = remaining === 0 ? 'color:var(--txt-4)' : 'color:var(--success);font-weight:600';
+      const sku        = item.sku || '';
+      const initial    = Number(item.total_stock     ?? 0);
+      const sold       = Number(item.sold_units      ?? 0);
+      const phantom    = Number(item.phantom_units   ?? 0);
+      const remaining  = Number(item.remaining_units ?? 0);
+      const boxes      = Number(item.boxes_count     ?? 0);
+      const isUndef    = !!item.is_undefined;
+      const isPhantom  = phantom > 0;
+      const isOOS      = remaining === 0 && !isUndef;
 
-      const isUndef    = _isUndefined(item.sku) || _isUndefined(item.upc) || _isUndefined(item.part_number);
-      const undefBadge = isUndef ? ` <span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEF</span>` : '';
-      const rowBg      = isUndef ? ' style="background:rgba(234,179,8,.06)"' : '';
+      // Row tint priority: undefined > phantom > OOS > none. Each tint maps
+      // to a distinct semantic (validation issue · oversold · sold out).
+      const rowClass = isUndef ? 'sku-row sku-row--undef'
+                     : isPhantom ? 'sku-row sku-row--phantom'
+                     : isOOS     ? 'sku-row sku-row--oos'
+                     :             'sku-row';
 
-      const uid     = item.row_uid || '';
-      const shortId = uid ? uid.slice(0, 8) : '—';
-      const uidCell = uid
-        ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(uid)}" style="font-family:'Courier New',monospace;font-size:11.5px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
-        : `<span style="color:var(--txt-4)">—</span>`;
+      const undefBadge = isUndef
+        ? ' <span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle">UNDEFINED</span>'
+        : '';
 
-      return `<tr data-uid="${Utils.escapeHtml(uid)}"
-                  data-sku="${Utils.escapeHtml(item.sku || '')}"
-                  data-upc="${Utils.escapeHtml(item.upc || '')}"
-                  data-qty="${Utils.escapeHtml(String(qty))}"
-                  data-part="${Utils.escapeHtml(item.part_number || '')}"
-                  data-box="${Utils.escapeHtml(item.box_number || '')}"
-                  data-notes="${Utils.escapeHtml(item.notes || '')}"
-                  data-date="${Utils.escapeHtml(item.date_added || '')}"${rowBg}>
-        <td>${uidCell}</td>
-        <td style="font-weight:600;color:var(--txt-1)">${Utils.escapeHtml(item.sku || '—')}${undefBadge}</td>
-        <td>${Utils.escapeHtml(item.box_number || '—')}</td>
-        <td>${Utils.escapeHtml(item.part_number || '—')}</td>
-        <td>${Utils.escapeHtml(item.upc || '—')}</td>
-        <td class="num">${Utils.stockBadge(qty)}</td>
-        <td class="num" style="${remColor}">${Utils.formatNumber(remaining)}</td>
-        <td>${Utils.formatDate(item.date_added)}</td>
-        <td style="font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(item.notes || '—')}</td>
-        <td style="width:36px;text-align:center;padding:0 4px">
-          ${canEdit ? `<button class="btn btn-ghost btn-icon btn-sm inv-edit-btn" title="Edit" style="opacity:.6"><i data-lucide="pencil" class="icon" style="width:13px;height:13px"></i></button>` : ''}
+      const remColor = remaining === 0
+        ? 'color:var(--txt-4)'
+        : 'color:var(--success);font-weight:600';
+      const phantomColor = phantom > 0 ? 'color:#dc2626;font-weight:600' : 'color:var(--txt-4)';
+
+      return `<tr class="${rowClass}" data-sku="${Utils.escapeHtml(sku)}">
+        <td class="sku-row-chevron" style="text-align:center;color:var(--txt-4);cursor:pointer;user-select:none">
+          <i data-lucide="chevron-right" class="icon sku-chevron-icon" style="width:14px;height:14px;transition:transform .15s"></i>
         </td>
+        <td style="font-weight:600;color:var(--txt-1);cursor:pointer">${Utils.escapeHtml(sku || '—')}${undefBadge}</td>
+        <td class="num">${Utils.stockBadge(initial)}</td>
+        <td class="num" style="color:var(--txt-2)">${Utils.formatNumber(sold)}</td>
+        <td class="num" style="${phantomColor}">${Utils.formatNumber(phantom)}</td>
+        <td class="num" style="${remColor}">${Utils.formatNumber(remaining)}</td>
+        <td class="num" style="color:var(--txt-3)">${Utils.formatNumber(boxes)}</td>
+        <td style="color:var(--txt-3)">${Utils.formatDate(item.last_added_at)}</td>
       </tr>`;
     }).join('');
 
-    // Click-to-copy full UID
-    tbody.querySelectorAll('.row-uid').forEach(el => {
-      el.addEventListener('click', async e => {
-        e.stopPropagation();
-        const fullId = el.closest('tr')?.dataset.uid || '';
-        if (!fullId) return;
-        try {
-          await navigator.clipboard.writeText(fullId);
-          Notify.success('Copied', `UID ${fullId.slice(0, 8)}… copied`);
-        } catch {
-          Notify.warning('Copy failed', 'Could not access clipboard');
-        }
-      });
+    // Click anywhere on the row (except inside the drilldown sub-table) toggles.
+    tbody.querySelectorAll('.sku-row').forEach(tr => {
+      tr.addEventListener('click', () => _toggleDrilldown(tr));
     });
-
-    if (canEdit) {
-      tbody.querySelectorAll('.inv-edit-btn').forEach(btn => {
-        btn.addEventListener('click', () => _openEditModal(btn.closest('tr')));
-      });
-    }
 
     const ps = CONFIG.getPageSize();
     if (info) {
       const start = ((_page - 1) * ps) + 1;
       const end   = Math.min(_page * ps, _total);
-      info.textContent = `Showing ${start}–${end} of ${Utils.formatNumber(_total)}`;
+      info.textContent = `Showing ${start}–${end} of ${Utils.formatNumber(_total)} SKUs`;
     }
 
     Pagination.render('inventory-pagination', _page, Math.ceil(_total / ps), p => { _page = p; load(); });
+  }
+
+  /* ── Drilldown: raw upload rows behind one SKU ──────────── */
+  async function _toggleDrilldown(tr) {
+    const sku       = tr.dataset.sku || '';
+    if (!sku) return;
+    const nextRow   = tr.nextElementSibling;
+    const isOpen    = nextRow?.classList.contains('sku-drill-row');
+    const chevron   = tr.querySelector('.sku-chevron-icon');
+
+    if (isOpen) {
+      nextRow.remove();
+      if (chevron) chevron.style.transform = '';
+      return;
+    }
+    if (chevron) chevron.style.transform = 'rotate(90deg)';
+
+    // Insert a placeholder row, then fill from cache or fetch.
+    const drillTr = document.createElement('tr');
+    drillTr.className = 'sku-drill-row';
+    drillTr.innerHTML = `<td colspan="${COL_COUNT}" style="padding:0;background:#f8fafc;border-top:1px solid var(--border)"><div style="padding:12px 16px;font-size:12px;color:var(--txt-4)">Loading raw rows&hellip;</div></td>`;
+    tr.parentNode.insertBefore(drillTr, tr.nextSibling);
+
+    const renderRows = (rows) => {
+      const canEdit = Auth.hasRole('manager');
+      if (!rows.length) {
+        drillTr.querySelector('div').innerHTML = '<span style="color:var(--txt-4)">No raw rows for this SKU.</span>';
+        return;
+      }
+      const head = `<thead><tr>
+        <th style="width:100px;font-size:11px">UID</th>
+        <th style="font-size:11px">Box #</th>
+        <th class="num" style="font-size:11px">Qty</th>
+        <th style="font-size:11px">Date Added</th>
+        <th style="font-size:11px">Notes</th>
+        <th style="width:90px;text-align:right;font-size:11px"></th>
+      </tr></thead>`;
+      const body = rows.map(r => {
+        const uid     = r.row_uid || '';
+        const shortId = uid ? uid.slice(0, 8) : '—';
+        const uidCell = uid
+          ? `<span class="row-uid" title="Click to copy full UID&#10;${Utils.escapeHtml(uid)}" style="font-family:'Courier New',monospace;font-size:11px;color:var(--txt-3);cursor:pointer;user-select:all">${Utils.escapeHtml(shortId)}</span>`
+          : `<span style="color:var(--txt-4)">—</span>`;
+        return `<tr data-uid="${Utils.escapeHtml(uid)}"
+                    data-sku="${Utils.escapeHtml(r.sku || '')}"
+                    data-upc="${Utils.escapeHtml(r.upc || '')}"
+                    data-qty="${Utils.escapeHtml(String(r.quantity ?? 0))}"
+                    data-part="${Utils.escapeHtml(r.part_number || '')}"
+                    data-box="${Utils.escapeHtml(r.box_number || '')}"
+                    data-notes="${Utils.escapeHtml(r.notes || '')}"
+                    data-date="${Utils.escapeHtml(r.date_added || '')}">
+          <td>${uidCell}</td>
+          <td>${Utils.escapeHtml(r.box_number || '—')}</td>
+          <td class="num">${Utils.formatNumber(r.quantity ?? 0)}</td>
+          <td>${Utils.formatDate(r.date_added)}</td>
+          <td style="font-size:12px;color:var(--txt-4)">${Utils.escapeHtml(r.notes || '—')}</td>
+          <td style="text-align:right">
+            ${canEdit ? '<button class="btn btn-ghost btn-icon btn-sm sku-raw-edit" title="Edit" style="opacity:.65"><i data-lucide="pencil" class="icon" style="width:12px;height:12px"></i></button>' : ''}
+          </td>
+        </tr>`;
+      }).join('');
+
+      drillTr.querySelector('td').innerHTML = `
+        <div style="padding:6px 14px 12px 38px">
+          <div style="font-size:11px;color:var(--txt-4);text-transform:uppercase;letter-spacing:.05em;font-weight:600;padding:6px 0">
+            Raw upload rows · ${rows.length}
+          </div>
+          <table class="data-table" style="width:100%;background:#fff;border:1px solid var(--border);border-radius:6px;overflow:hidden">${head}<tbody>${body}</tbody></table>
+        </div>`;
+
+      // Wire drilldown actions.
+      const sub = drillTr.querySelector('tbody');
+      sub.querySelectorAll('.row-uid').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const fullId = el.closest('tr')?.dataset.uid || '';
+          if (!fullId) return;
+          try {
+            await navigator.clipboard.writeText(fullId);
+            Notify.success('Copied', `UID ${fullId.slice(0, 8)}… copied`);
+          } catch { Notify.warning('Copy failed', 'Could not access clipboard'); }
+        });
+      });
+      if (canEdit) {
+        sub.querySelectorAll('.sku-raw-edit').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _openEditModal(btn.closest('tr'));
+          });
+        });
+      }
+      // Keep clicks inside the drilldown from bubbling up to the SKU row toggle.
+      drillTr.addEventListener('click', e => e.stopPropagation());
+
+      if (window.lucide) lucide.createIcons();
+    };
+
+    try {
+      let rows = _rawCache.get(sku);
+      if (!rows) {
+        const res  = await API.getRawRowsBySku(sku);
+        rows       = res?.items || [];
+        _rawCache.set(sku, rows);
+      }
+      renderRows(rows);
+    } catch (err) {
+      drillTr.querySelector('div').innerHTML = `<span style="color:var(--error)">Failed to load raw rows.</span>`;
+      Notify.apiError(err);
+    }
   }
 
   /* ── Inline edit modal ───────────────────────────────────── */
@@ -582,22 +678,27 @@ const InventoryList = (() => {
     }
   }
 
-  /* ── Load ────────────────────────────────────────────────── */
+  /* ── Load (centralized SKU summary endpoint) ──────────────── */
   async function load() {
     if (_loading) return;
     _loading = true;
 
     const tbody = document.getElementById('inventory-tbody');
-    if (tbody) tbody.innerHTML = Loading.tableRows(COLS.length, 6);
+    if (tbody) tbody.innerHTML = Loading.tableRows(COL_COUNT, 6);
+
+    // Drilldown cache invalidates on every list reload — a fresh aggregate
+    // means raw rows may have moved too (uploads, edits, deletes).
+    _rawCache.clear();
 
     const ps = CONFIG.getPageSize();
 
     try {
       const options = { sort_by: _sortBy, sort_dir: _sortDir, status: _statusFilter || 'all' };
-      const data = await API.getInventoryList(_page, ps, _search, options);
-      _renderTable(data.items || data.rows || [], data.total || 0);
+      const res    = await API.getSkuSummary(_page, ps, _search, options);
+      const data   = res?.data ?? res;
+      _renderTable(data.items || [], data.total || 0);
     } catch (err) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="${COLS.length}">${Loading.error('Failed to load inventory')}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="${COL_COUNT}">${Loading.error('Failed to load SKU view')}</td></tr>`;
       Notify.apiError(err);
     } finally {
       _loading = false;
@@ -635,14 +736,15 @@ const InventoryList = (() => {
     _search       = '';
     _total        = 0;
     _loading      = false;
-    _sortBy       = 'date_added';
-    _sortDir      = 'desc';
+    _sortBy       = 'sku';
+    _sortDir      = 'asc';
     _statusFilter = 'all';
+    _rawCache.clear();
     const tbody = document.querySelector('#page-inventory tbody');
     if (tbody) tbody.innerHTML = '';
     const searchInput = document.getElementById('inventory-search');
     if (searchInput) searchInput.value = '';
-    const statusSel = document.getElementById('inv-status-filter');
+    const statusSel = document.getElementById('filter-inventory-status');
     if (statusSel) statusSel.value = 'all';
   }
 
