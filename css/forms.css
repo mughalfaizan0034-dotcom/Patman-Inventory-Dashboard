@@ -16,8 +16,13 @@
   display: flex;
   gap: 12px;
   align-items: flex-end;
+  flex-wrap: wrap;
 }
-.form-row .form-group { flex: 1; margin-bottom: 0; }
+.form-row .form-group { flex: 1 1 180px; margin-bottom: 0; min-width: 0; }
+@media (max-width: 480px) {
+  .form-row { flex-direction: column; align-items: stretch; }
+  .form-row .form-group { flex: 1 1 auto; width: 100%; }
+}
 
 /* ── Labels ─────────────────────────────────────────────────── */
 .form-label {
@@ -195,6 +200,21 @@
 @keyframes step-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: .5; }
+}
+
+/* ── Uploads top grid (Inventory | Orders | Guide) ──────────── */
+.uploads-top-grid {
+  display: grid;
+  grid-template-columns: 3fr 3fr 4fr;
+  gap: 14px;
+  align-items: stretch;
+}
+@media (max-width: 1200px) {
+  .uploads-top-grid { grid-template-columns: 1fr 1fr; }
+  .uploads-top-grid > .upload-guide-panel { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .uploads-top-grid { grid-template-columns: 1fr; gap: 12px; }
 }
 
 /* ── Upload card ────────────────────────────────────────────── */
