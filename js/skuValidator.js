@@ -1,26 +1,13 @@
 /* ============================================================
-   skuValidator.js — Browser-side SKU structure compiler/validator.
+   skuValidator.js — Phase-1 compatibility wrapper.
 
-   Mirror of server/src/utils/skuValidator.js. Keep BOTH in sync
-   whenever the structure JSON shape, prefix-escaping rules, or
-   placeholder list changes. Used by:
-
-     - Settings → Organizations edit modal (live preview + "Test SKU")
-     - Future: per-row highlighting (deferred to Phase 2)
-
-   Structure JSON shape (single source of truth):
-     {
-       enabled:      true,
-       prefixes:     ["ARA", "BX"],
-       separator:    "-",
-       box_pattern:  "\\d+",
-       upc_pattern:  "\\d{6,14}",
-       part_pattern: "[A-Z0-9-]+",
-       compiled:     "^(?:ARA|BX)(?:\\d+)-(?:\\d{6,14})-(?:[A-Z0-9-]+)$"
-     }
+   New code should use window.SkuEngine.* directly. This file
+   preserves the original Phase-1 surface so existing call sites
+   keep working untouched.
    ============================================================ */
 
 const SkuValidator = (() => {
+
   const PLACEHOLDER_VALUES = new Set(['', '"', '""', 'NA', 'N/A', '#NA', '#N/A']);
   const RE_META = /[.*+?^${}()|[\]\\]/g;
 
@@ -38,49 +25,23 @@ const SkuValidator = (() => {
   }
 
   function compileStructureRegex(struct) {
-    const s = parseStructure(struct);
-    if (!s || s.enabled === false) return null;
-
-    const prefixes = Array.isArray(s.prefixes)
-      ? s.prefixes.map(p => String(p ?? '').trim()).filter(Boolean)
-      : [];
-    if (!prefixes.length) return null;
-
-    const separator   = s.separator    ?? '-';
-    const boxPattern  = s.box_pattern  || '\\d+';
-    const upcPattern  = s.upc_pattern  || '\\d+';
-    const partPattern = s.part_pattern || '[A-Z0-9-]+';
-    const sepEscaped  = escapeRegexLiteral(separator);
-    const prefixGroup = `(?:${prefixes.map(escapeRegexLiteral).join('|')})`;
-
-    return `^${prefixGroup}(?:${boxPattern})${sepEscaped}(?:${upcPattern})${sepEscaped}(?:${partPattern})$`;
+    return window.SkuEngine?.compileSegmentsRegex(window.SkuEngine.coerceToV2(struct)) ?? null;
   }
 
   function normalizeStructureForStorage(struct) {
-    const s = parseStructure(struct);
-    if (!s) return null;
-    return {
-      enabled:      s.enabled !== false,
-      prefixes:     Array.isArray(s.prefixes) ? s.prefixes.map(p => String(p ?? '').trim()).filter(Boolean) : [],
-      separator:    typeof s.separator === 'string'    ? s.separator    : '-',
-      box_pattern:  typeof s.box_pattern === 'string'  ? s.box_pattern  : '\\d+',
-      upc_pattern:  typeof s.upc_pattern === 'string'  ? s.upc_pattern  : '\\d+',
-      part_pattern: typeof s.part_pattern === 'string' ? s.part_pattern : '[A-Z0-9-]+',
-      compiled:     compileStructureRegex(s) || '',
-    };
+    if (struct == null) return null;
+    const v2 = window.SkuEngine?.coerceToV2(struct);
+    if (!v2 || !v2.enabled || !v2.segments?.length) return null;
+    return v2;
   }
 
   function isPlaceholderValue(value) {
     return PLACEHOLDER_VALUES.has(String(value ?? '').trim().toUpperCase());
   }
 
-  // Validate a single SKU against a compiled regex string. Returns
-  //   { valid: boolean, reason: 'empty_or_placeholder' | 'structure_mismatch' | null }
   function validateSku(sku, compiledRegex) {
-    if (isPlaceholderValue(sku)) {
-      return { valid: false, reason: 'empty_or_placeholder' };
-    }
-    if (!compiledRegex) return { valid: true, reason: null };
+    if (isPlaceholderValue(sku)) return { valid: false, reason: 'empty_or_placeholder' };
+    if (!compiledRegex)          return { valid: true,  reason: null };
     let re;
     try { re = new RegExp(compiledRegex); }
     catch { return { valid: true, reason: null }; }

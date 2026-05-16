@@ -910,11 +910,13 @@
   outline-offset: 2px;
 }
 
-/* ── Card head: icon · centered title block · arrow ─────────── */
+/* ── Card head: icon + main metric on left · centered watermark title · arrow on right ─── */
 .kpi-card-head {
+  position: relative;          /* anchor for the absolutely-centered eyebrow */
   display: flex;
   align-items: center;
   gap: 14px;
+  min-height: 44px;
 }
 .kpi-card-head-icon {
   flex-shrink: 0;
@@ -929,35 +931,43 @@
 }
 .kpi-card-head-icon .icon { stroke-width: 2.25; }
 
-/* The title block (eyebrow + main metric) is centered within the space
-   between the icon and the arrow. Icon (38px) and arrow (38px) are sized
-   identically so the visual center coincides with the card's geometric
-   center — true-center without needing absolute positioning. */
+/* Main metric block (Total SKUs · 13,240) is LEFT-aligned, sitting next
+   to the icon in the natural flex flow. */
 .kpi-card-head-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  justify-content: center;
   gap: 4px;
 }
+/* Eyebrow ("INVENTORY INTELLIGENCE" / "SALES INTELLIGENCE") is a centered
+   watermark — absolutely positioned at the visual center of the head, behind
+   the main metric (z-index 0). pointer-events:none so it never blocks clicks
+   on the underlying card. */
 .kpi-card-eyebrow {
-  font-size: 11px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-size: 11.5px;
   font-weight: 700;
-  /* Subtle, watermark-like — sits behind the prominent metric value. */
   color: var(--txt-4);
   text-transform: uppercase;
   letter-spacing: .14em;
   line-height: 1;
-  opacity: .6;
+  opacity: .55;
+  white-space: nowrap;
+  z-index: 0;
 }
 .kpi-card-main {
   display: flex;
   align-items: baseline;
-  justify-content: center;
   gap: 12px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 1;                  /* sit above the watermark eyebrow */
 }
 .kpi-card-label {
   font-size: 14px;
@@ -986,6 +996,8 @@
   background: transparent;
   opacity: .55;
   transition: opacity var(--dur), transform var(--dur), background var(--dur);
+  position: relative;
+  z-index: 1;
 }
 .kpi-card:hover .kpi-card-arrow {
   opacity: 1;

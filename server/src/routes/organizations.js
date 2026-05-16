@@ -142,14 +142,26 @@ export async function organizationsRoutes(fastify, { orgsRepo, membershipsRepo, 
       const existing = await orgsRepo.findBySlug(parsed.data.slug);
       if (existing) return reply.code(409).send({ success: false, error: 'Organization slug already exists' });
 
-      const orgId      = randomUUID();
+      // sku_structure is MANDATORY on create. prepareSkuStructure returns
+      // { value: null } when the input is null OR fails to normalize into a
+      // usable v2 structure (e.g. enabled=false / segments=[]). Reject so
+      // every org in the system has a defined SKU pattern from day one.
       const skuPrep    = prepareSkuStructure(parsed.data.sku_structure);
+      if (skuPrep.skip || !skuPrep.value) {
+        return reply.code(400).send({
+          success: false,
+          error:   'SKU structure is required when creating an organization. Define at least one segment.',
+          details: { fieldErrors: { sku_structure: ['Required'] } },
+        });
+      }
+
+      const orgId      = randomUUID();
       await orgsRepo.insert({
         organization_id: orgId,
         slug:            parsed.data.slug,
         display_name:    parsed.data.display_name,
         is_active:       true,
-        sku_structure:   skuPrep.skip ? null : skuPrep.value,
+        sku_structure:   skuPrep.value,
       });
 
       const memberIds = [...new Set([
