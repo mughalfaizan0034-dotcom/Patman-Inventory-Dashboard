@@ -81,12 +81,28 @@ CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.inventory_summary`
 CLUSTER BY organization_id, sku;
 
 
--- ── box_summary ────────────────────────────────────────────────
--- One row per (organization_id, upc, part_number, box_number). Powers
--- Box Lookup operational diagnostics.
-CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.box_summary` (
+-- ── box_summary_by_upc + box_summary_by_part ──────────────────
+-- One row per (organization_id, upc/part, ...) per table. Box Lookup
+-- searches by EITHER upc OR part_number with equal frequency, so
+-- single-key clustering on either column would leave the other path
+-- with no pruning beyond the org. Two narrow tables, each clustered
+-- for exactly one access pattern, give symmetric ~10 KB scans for
+-- both search types instead of 10 KB / 10 MB asymmetric.
+--
+-- `upc_norm` / `part_norm` store the LOWER+TRIMmed form at write time
+-- so the query can use literal equality on the clustered column
+-- (clustering doesn't help LOWER(TRIM(upc)) — that's a computed
+-- expression BigQuery can't map back to block-level stats).
+--
+-- Router lives in lookupRepository.search: detect the query shape
+-- (numeric 8-14 digits → UPC table; else → part table; ambiguous →
+-- query both and merge). summaryRefreshService writes BOTH tables
+-- on every refresh inside the same per-org scope.
+
+CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.box_summary_by_upc` (
   organization_id   STRING    NOT NULL,
-  upc               STRING    NOT NULL,
+  upc_norm          STRING    NOT NULL,    -- LOWER(TRIM(upc)) for direct cluster pruning
+  upc               STRING    NOT NULL,    -- original (display)
   part_number       STRING    NOT NULL,
   box_number        STRING    NOT NULL,
 
@@ -97,11 +113,38 @@ CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.box_summary` (
 
   refreshed_at      TIMESTAMP NOT NULL
 )
-CLUSTER BY organization_id, upc;
+CLUSTER BY organization_id, upc_norm;
+
+CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.box_summary_by_part` (
+  organization_id   STRING    NOT NULL,
+  part_norm         STRING    NOT NULL,    -- LOWER(TRIM(part_number)) for direct cluster pruning
+  upc               STRING    NOT NULL,
+  part_number       STRING    NOT NULL,    -- original (display)
+  box_number        STRING    NOT NULL,
+
+  initial_stock     INT64,
+  fulfilled_units   INT64,
+  phantom_units     INT64,
+  remaining_stock   INT64,
+
+  refreshed_at      TIMESTAMP NOT NULL
+)
+CLUSTER BY organization_id, part_norm;
 
 
 -- Verification:
 SELECT table_name, clustering_fields
 FROM `patman-inventory.patman_inventory.INFORMATION_SCHEMA.TABLES`
-WHERE table_name IN ('dashboard_summary', 'inventory_summary', 'box_summary')
+WHERE table_name IN ('dashboard_summary', 'inventory_summary', 'box_summary_by_upc', 'box_summary_by_part')
 ORDER BY table_name;
+
+
+-- ── Upgrade note ──────────────────────────────────────────────
+-- If an earlier revision of this migration was run and created a
+-- single `box_summary` table, drop it manually after deploying the
+-- new code:
+--
+--   DROP TABLE IF EXISTS `patman-inventory.patman_inventory.box_summary`;
+--
+-- No data loss — summaryRefreshService rebuilds both new tables from
+-- raw inventory + orders on the next mutating operation per org.

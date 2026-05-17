@@ -24,7 +24,12 @@ export const TABLES = {
   // Materialized summary tables — populated by summaryRefreshService.
   // Refresh runs after every mutating operation; reads do NOT trigger
   // recomputation. See server/sql/migrations/20260517_002_materialized_summaries.sql.
-  DASHBOARD_SUMMARY: `${DATASETS.ANALYTICS}.dashboard_summary`,
-  INVENTORY_SUMMARY: `${DATASETS.ANALYTICS}.inventory_summary`,
-  BOX_SUMMARY:       `${DATASETS.ANALYTICS}.box_summary`,
+  //
+  // Box Lookup is split into two purpose-built tables so EITHER search
+  // path (UPC or part number) gets full clustering benefit. See the
+  // architecture analysis in docs/AUDIT_FOLLOWUP.md (Option D).
+  DASHBOARD_SUMMARY:    `${DATASETS.ANALYTICS}.dashboard_summary`,
+  INVENTORY_SUMMARY:    `${DATASETS.ANALYTICS}.inventory_summary`,
+  BOX_SUMMARY_BY_UPC:   `${DATASETS.ANALYTICS}.box_summary_by_upc`,
+  BOX_SUMMARY_BY_PART:  `${DATASETS.ANALYTICS}.box_summary_by_part`,
 };

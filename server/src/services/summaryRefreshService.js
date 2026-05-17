@@ -24,11 +24,12 @@ import { ordersAggCTE, invAggCTE, perSkuCTE } from '../utils/skuPivots.js';
  * KPI parity logger and the next refresh will catch the drift.
  */
 export function createSummaryRefreshService({ bq, projectId, orgsRepo, logger }) {
-  const invTable         = `\`${projectId}.${TABLES.INVENTORY}\``;
-  const ordTable         = `\`${projectId}.${TABLES.ORDERS}\``;
-  const dashboardSummary = `\`${projectId}.${TABLES.DASHBOARD_SUMMARY}\``;
-  const inventorySummary = `\`${projectId}.${TABLES.INVENTORY_SUMMARY}\``;
-  const boxSummary       = `\`${projectId}.${TABLES.BOX_SUMMARY}\``;
+  const invTable          = `\`${projectId}.${TABLES.INVENTORY}\``;
+  const ordTable          = `\`${projectId}.${TABLES.ORDERS}\``;
+  const dashboardSummary  = `\`${projectId}.${TABLES.DASHBOARD_SUMMARY}\``;
+  const inventorySummary  = `\`${projectId}.${TABLES.INVENTORY_SUMMARY}\``;
+  const boxSummaryByUpc   = `\`${projectId}.${TABLES.BOX_SUMMARY_BY_UPC}\``;
+  const boxSummaryByPart  = `\`${projectId}.${TABLES.BOX_SUMMARY_BY_PART}\``;
 
   async function _resolveSkuRegex(organizationId) {
     if (!orgsRepo?.getSkuRegex) return null;
@@ -187,22 +188,17 @@ export function createSummaryRefreshService({ bq, projectId, orgsRepo, logger })
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // box_summary — one row per (organization_id, upc, part_number, box_number)
+  // box_summary_by_upc / box_summary_by_part — Option D (see audit doc).
+  // Two narrow tables, each clustered for ONE search path so both
+  // UPC and part-number lookups get equal sub-50ms scan performance.
+  // Same row body in both; differ only in the LOWER+TRIMmed clustered
+  // column (upc_norm vs part_norm).
   // ─────────────────────────────────────────────────────────────────────
   async function _rebuildBoxSummary(organizationId) {
-    await bq.query({
-      query:  `DELETE FROM ${boxSummary} WHERE organization_id = @organizationId`,
-      params: { organizationId },
-    });
-
-    // Two-stage aggregation mirrors lookupRepository.search but at full-org
-    // scope (no search predicate). Aggregates by (upc, part_number, box).
-    const insertQuery = `
-      INSERT INTO ${boxSummary} (
-        organization_id, upc, part_number, box_number,
-        initial_stock, fulfilled_units, phantom_units, remaining_stock,
-        refreshed_at
-      )
+    // Build the source aggregate once — same input rows feed both tables.
+    // The CTE chain is identical to what lookupRepository.search used to do
+    // (minus the operator query predicate). One round-trip per write table.
+    const sourceCTE = `
       WITH inv_grouped AS (
         SELECT
           COALESCE(upc, '')         AS upc,
@@ -230,24 +226,71 @@ export function createSummaryRefreshService({ bq, projectId, orgsRepo, logger })
         FROM inv_skus s
         LEFT JOIN orders_agg o ON s.sku = o.effective_sku
         GROUP BY s.upc, s.part_number, s.box_number
+      ),
+      box_rows AS (
+        SELECT
+          ig.upc,
+          ig.part_number,
+          ig.box_number,
+          ig.initial_stock,
+          LEAST(COALESCE(bo.units_sold, 0), ig.initial_stock)        AS fulfilled_units,
+          GREATEST(COALESCE(bo.units_sold, 0) - ig.initial_stock, 0) AS phantom_units,
+          GREATEST(ig.initial_stock - COALESCE(bo.units_sold, 0), 0) AS remaining_stock
+        FROM inv_grouped ig
+        LEFT JOIN box_orders bo
+          ON  ig.box_number  = bo.box_number
+          AND ig.part_number = bo.part_number
+          AND ig.upc         = bo.upc
       )
-      SELECT
-        @organizationId,
-        ig.upc,
-        ig.part_number,
-        ig.box_number,
-        ig.initial_stock,
-        LEAST(COALESCE(bo.units_sold, 0), ig.initial_stock)        AS fulfilled_units,
-        GREATEST(COALESCE(bo.units_sold, 0) - ig.initial_stock, 0) AS phantom_units,
-        GREATEST(ig.initial_stock - COALESCE(bo.units_sold, 0), 0) AS remaining_stock,
-        CURRENT_TIMESTAMP()
-      FROM inv_grouped ig
-      LEFT JOIN box_orders bo
-        ON  ig.box_number  = bo.box_number
-        AND ig.part_number = bo.part_number
-        AND ig.upc         = bo.upc
     `;
-    await bq.query({ query: insertQuery, params: { organizationId } });
+
+    // ── box_summary_by_upc ── clustered by (org, upc_norm)
+    await bq.query({
+      query:  `DELETE FROM ${boxSummaryByUpc} WHERE organization_id = @organizationId`,
+      params: { organizationId },
+    });
+    await bq.query({
+      query: `
+        ${sourceCTE}
+        INSERT INTO ${boxSummaryByUpc} (
+          organization_id, upc_norm, upc, part_number, box_number,
+          initial_stock, fulfilled_units, phantom_units, remaining_stock,
+          refreshed_at
+        )
+        SELECT
+          @organizationId,
+          LOWER(TRIM(upc))         AS upc_norm,
+          upc, part_number, box_number,
+          initial_stock, fulfilled_units, phantom_units, remaining_stock,
+          CURRENT_TIMESTAMP()
+        FROM box_rows
+      `,
+      params: { organizationId },
+    });
+
+    // ── box_summary_by_part ── clustered by (org, part_norm)
+    await bq.query({
+      query:  `DELETE FROM ${boxSummaryByPart} WHERE organization_id = @organizationId`,
+      params: { organizationId },
+    });
+    await bq.query({
+      query: `
+        ${sourceCTE}
+        INSERT INTO ${boxSummaryByPart} (
+          organization_id, part_norm, upc, part_number, box_number,
+          initial_stock, fulfilled_units, phantom_units, remaining_stock,
+          refreshed_at
+        )
+        SELECT
+          @organizationId,
+          LOWER(TRIM(part_number)) AS part_norm,
+          upc, part_number, box_number,
+          initial_stock, fulfilled_units, phantom_units, remaining_stock,
+          CURRENT_TIMESTAMP()
+        FROM box_rows
+      `,
+      params: { organizationId },
+    });
   }
 
   /**
