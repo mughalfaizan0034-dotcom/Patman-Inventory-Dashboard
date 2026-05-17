@@ -127,4 +127,32 @@ export async function usersRoutes(fastify, { usersService }) {
       return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
     }
   });
+
+  // Permanently delete the user — irreversible row removal from users +
+  // every membership + every refresh token. Two-step gate: target MUST
+  // already be is_active=false (deactivate first). The service layer
+  // also enforces this so a direct API call can't bypass the gate.
+  fastify.delete('/:id/permanent', { preHandler: [authenticate, requireRole('admin')] }, async (request, reply) => {
+    try {
+      const result = await usersService.permanentDeleteUser(request.params.id, request.user.user_id);
+      request.log.warn(
+        {
+          event:              'user_permanently_deleted',
+          target_id:          request.params.id,
+          by:                 request.user.user_id,
+          username:           result.username,
+          memberships_deleted: result.memberships_deleted,
+          tokens_deleted:     result.tokens_deleted,
+        },
+        'User permanently deleted (irreversible)',
+      );
+      return reply.send({ success: true, data: result });
+    } catch (err) {
+      if (err instanceof AppError) {
+        return reply.code(err.statusCode).send({ success: false, error: err.message });
+      }
+      request.log.error({ err }, 'User permanent-delete error');
+      return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
+    }
+  });
 }

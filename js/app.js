@@ -1318,9 +1318,16 @@ const Settings = (() => {
           <div class="form-readonly" style="font-family:monospace">${Utils.escapeHtml(org.slug)}</div>
         </div>
         <div data-field="error" class="form-error" style="display:none"></div>`);
+      // Footer for DEACTIVATED orgs: Cancel · Remove Permanently · Activate.
+      // "Remove" here means actually delete from BigQuery (rows in
+      // memberships, inventory, orders, both upload audit tables, all four
+      // summary tables, organizations). Irreversible cascade. The two-step
+      // gate is already satisfied (org is_active=false). Disabled when the
+      // operator is currently signed into this org — switch first.
       m.setFooter(`
         <button class="btn btn-secondary btn-sm" data-action="cancel">Cancel</button>
-        <button class="btn btn-primary btn-sm" data-action="activate">Activate Organization</button>`);
+        <button class="btn btn-danger    btn-sm" data-action="permanent-delete"${isHere ? ' disabled title="Switch to another workspace before deleting this organization"' : ''}>Remove Permanently</button>
+        <button class="btn btn-primary   btn-sm" data-action="activate">Activate Organization</button>`);
     } else {
       m.setBody(`
         <form data-form="edit-org" autocomplete="off">
@@ -1359,13 +1366,14 @@ const Settings = (() => {
           ${_renderSkuStructureSection(org.sku_structure, { required: true })}
           <div data-field="error" class="form-error" style="display:none"></div>
         </form>`);
-      // Footer: Cancel · Remove (was "Deactivate" pre-2026-05-18; renamed
-      // for consistency with the user edit modal's Remove action. Same
-      // underlying endpoint — PATCH with is_active=false — so the action
-      // remains a reversible soft-deactivation, not a hard delete.)
+      // Footer for ACTIVE orgs: Cancel · Deactivate · Save Changes.
+      // Deactivation is the reversible soft step (PATCH is_active=false).
+      // To permanently delete the org, the operator deactivates first;
+      // re-opening the modal then exposes a "Remove Permanently" button
+      // in the deactivated-org footer above.
       m.setFooter(`
         <button class="btn btn-secondary btn-sm" data-action="cancel">Cancel</button>
-        <button class="btn btn-danger    btn-sm" data-action="deactivate"${isHere ? ' disabled title="Switch to another workspace before removing this one"' : ''}>Remove</button>
+        <button class="btn btn-danger    btn-sm" data-action="deactivate"${isHere ? ' disabled title="Switch to another workspace before deactivating this one"' : ''}>Deactivate</button>
         <button class="btn btn-primary   btn-sm" data-action="save">Save Changes</button>`);
     }
     m.show();

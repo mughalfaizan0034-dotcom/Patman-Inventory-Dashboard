@@ -198,6 +198,76 @@ export async function organizationsRoutes(fastify, { orgsRepo, membershipsRepo, 
     }
   });
 
+  // Permanently delete an organization and everything it owns.
+  //
+  // Irreversible cascade — deletes from:
+  //   - memberships (all org rows)
+  //   - inventory, orders (all org data)
+  //   - inventory_uploads, order_uploads (audit history)
+  //   - dashboard_summary, inventory_summary, box_summary_by_upc,
+  //     box_summary_by_part (materialized views)
+  //   - organizations (the row itself, last)
+  //
+  // Two-step gate: the org MUST already be is_active=false. Operators
+  // must Remove (deactivate) first, re-open the modal, then explicitly
+  // confirm permanent delete. The caller's own current org is also
+  // forbidden — switch to a different workspace first.
+  fastify.delete('/:id/permanent', { preHandler: [authenticate, requireRole('admin')] }, async (request, reply) => {
+    const orgId = request.params.id;
+    try {
+      const org = await orgsRepo.findById(orgId);
+      if (!org) {
+        return reply.code(404).send({ success: false, error: 'Organization not found' });
+      }
+      if (org.is_active !== false) {
+        return reply.code(409).send({
+          success: false,
+          error:   'Organization must be removed (deactivated) first. Open the Edit dialog, click Remove, then return to delete permanently.',
+        });
+      }
+      if (orgId === request.user.organization_id) {
+        return reply.code(409).send({
+          success: false,
+          error:   "You can't delete the organization you're currently signed into. Switch workspaces and try again.",
+        });
+      }
+
+      // Cascade memberships explicitly before clearing org-scoped data —
+      // memberships live in their own repo and are scoped by both
+      // user_id and organization_id, so the org's deleteAllOrgData
+      // wouldn't catch them.
+      const mDeleted = await membershipsRepo.deleteAllByOrgId(orgId);
+      const result   = await orgsRepo.deleteAllOrgData(orgId);
+
+      request.log.warn(
+        {
+          event:               'org_permanently_deleted',
+          target_id:           orgId,
+          by:                  request.user.user_id,
+          display_name:        org.display_name,
+          tables_cleared:      result.tables_cleared,
+          memberships_deleted: mDeleted,
+        },
+        'Organization permanently deleted (irreversible cascade)',
+      );
+      return reply.send({
+        success: true,
+        data: {
+          organization_id:     orgId,
+          display_name:        org.display_name,
+          tables_cleared:      result.tables_cleared,
+          memberships_deleted: mDeleted,
+        },
+      });
+    } catch (err) {
+      if (err instanceof AppError) {
+        return reply.code(err.statusCode).send({ success: false, error: err.message });
+      }
+      request.log.error({ err }, 'Organization permanent-delete error');
+      return reply.code(500).send({ success: false, error: err?.message || 'Internal server error' });
+    }
+  });
+
   // Update organization metadata + member roster.
   // Slug is NOT accepted — it's locked after creation.
   fastify.patch('/:id', { preHandler: [authenticate, requireRole('admin')] }, async (request, reply) => {

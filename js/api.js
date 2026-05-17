@@ -384,6 +384,11 @@ const API = (() => {
     async createUser(userData)               { return _crPost('/users', userData); },
     async updateUser(membershipId, updates)  { return _crPatch(`/users/${membershipId}`, updates); },
     async deleteUser(membershipId)           { return _crDelete(`/users/${membershipId}`); },
+    // Permanent (irreversible) hard delete — only allowed once the user
+    // is already deactivated. Removes the user row + every membership
+    // + every refresh token. Activity log entries are intentionally
+    // preserved server-side for audit.
+    async permanentDeleteUser(userId)        { return _crDelete(`/users/${userId}/permanent`); },
 
     /* Memberships */
     async getMemberships()                   { return _crGet('/memberships'); },
@@ -394,6 +399,12 @@ const API = (() => {
     async getOrganizations()                 { return _crGet('/organizations'); },
     async createOrganization(data)           { return _crPost('/organizations', data); },
     async updateOrganization(id, updates)    { return _crPatch(`/organizations/${id}`, updates); },
+    // Permanent (irreversible) hard delete with full cascade. Only
+    // allowed once the org is_active=false AND the caller is signed
+    // into a DIFFERENT org. Removes memberships, inventory, orders,
+    // both upload audit tables, all four summary tables, and the
+    // organizations row last.
+    async permanentDeleteOrganization(id)    { return _crDelete(`/organizations/${id}/permanent`); },
 
     /* System */
     async ping()              { return _crGet('/health'); },
