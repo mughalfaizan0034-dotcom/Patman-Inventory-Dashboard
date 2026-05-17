@@ -57,4 +57,13 @@ export const env = {
   TASKS_QUEUE_NAME: optional('TASKS_QUEUE_NAME', ''),
   WORKER_BASE_URL:  optional('WORKER_BASE_URL',  ''),
   TASKS_INVOKER_SA: optional('TASKS_INVOKER_SA', ''),
+
+  // ── GCS staging bucket (Phase B BigQuery LOAD JOB ingest) ────────
+  // When set, the upload Add path stages parsed rows as NDJSON to
+  //   gs://${UPLOAD_BUCKET}/uploads/${upload_id}/{inventory|orders}-adds.ndjson
+  // and runs a single BigQuery LOAD JOB instead of the chunked DML
+  // INSERTs (which take ~5 minutes for 100k rows). When unset, the
+  // pipeline falls back to the pure DML path — same correctness,
+  // slower. Bucket setup steps live in docs/AUDIT_FOLLOWUP.md.
+  UPLOAD_BUCKET: optional('UPLOAD_BUCKET', ''),
 };

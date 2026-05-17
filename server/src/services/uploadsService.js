@@ -2,18 +2,17 @@ import { runUploadPipeline }   from '../uploads/core/pipelineRunner.js';
 import { inventoryImporter }   from '../uploads/importers/inventoryImporter.js';
 import { ordersImporter }      from '../uploads/importers/ordersImporter.js';
 
-export function createUploadsService({ uploadsRepo }) {
+// Phase B (2026-05-18): storageService + logger are injected here so
+// every pipeline invocation gets GCS staging + per-phase timing logs.
+// Both are optional — when unsupplied, the pipeline falls back to
+// pure DML (Phase A behavior).
+export function createUploadsService({ uploadsRepo, storageService = null, logger = null }) {
 
-  // Phase A (2026-05-18): callers now supply `uploadId` when running
-  // the new async upload lifecycle — the route pre-creates an
-  // `accepted` row, hands the uploadId to the pipeline, then
-  // finalizes the row after Phase 2-4 completes. The third arg stays
-  // optional so legacy callers (scripts, tests) that don't manage the
-  // job row still work.
   function processInventoryUpload(organizationId, userId, stream, filename, uploadId = null) {
     return runUploadPipeline({
       importer: inventoryImporter,
       uploadsRepo, organizationId, userId, stream, filename, uploadId,
+      storageService, logger,
     });
   }
 
@@ -21,6 +20,7 @@ export function createUploadsService({ uploadsRepo }) {
     return runUploadPipeline({
       importer: ordersImporter,
       uploadsRepo, organizationId, userId, stream, filename, uploadId,
+      storageService, logger,
     });
   }
 

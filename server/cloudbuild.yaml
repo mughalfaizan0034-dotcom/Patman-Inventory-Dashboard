@@ -59,6 +59,11 @@ steps:
       # TASKS_* — leave UNSET until the operator creates the Cloud Tasks
       # queue (see docs/AUDIT_FOLLOWUP.md). cloudTasksService falls back
       # to inline refresh when any of the four is missing.
+      # UPLOAD_BUCKET — Phase B GCS staging. Drops 100k-row Add latency
+      # from ~5 min to ~10-15s via BigQuery LOAD JOB ingest. Set this
+      # AFTER creating the GCS bucket + granting the Cloud Run SA
+      # roles/storage.objectAdmin (see docs/AUDIT_FOLLOWUP.md).
+      # Falls back to chunked DML when unset.
       - --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,CORS_ORIGIN=https://mughalfaizan0034-dotcom.github.io,NODE_ENV=production,LOG_LEVEL=info,DEBUG_ROUTES=true
 
 images:

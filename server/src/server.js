@@ -28,6 +28,7 @@ import { createDashboardService } from './services/dashboardService.js';
 import { createInventoryMetricsService } from './services/inventoryMetricsService.js';
 import { createSummaryRefreshService } from './services/summaryRefreshService.js';
 import { createCloudTasksService } from './services/cloudTasksService.js';
+import { createStorageService } from './services/storageService.js';
 import { createUploadsService } from './services/uploadsService.js';
 import { createUsersService } from './services/usersService.js';
 import { createUsernameService } from './services/usernameService.js';
@@ -185,7 +186,17 @@ export async function buildApp() {
     // (only fires when env SUMMARY_PARITY_LOG=1). The bq + projectId injection
     // lets it run the comparison read without depending on the metrics service.
     const dashboardService = createDashboardService({ dashboardRepo, metricsService, ...deps, logger: fastify.log });
-    const uploadsService   = createUploadsService({ uploadsRepo });
+    // Phase B (2026-05-18): GCS staging service for BigQuery LOAD JOB
+    // ingest. When UPLOAD_BUCKET isn't set, `enabled` stays false and
+    // the upload pipeline falls back to the pre-Phase-B DML chunked
+    // path — same correctness, slower. Operator wires this once.
+    const storageService = createStorageService({
+      bucketName: env.UPLOAD_BUCKET,
+      projectId:  env.GCP_PROJECT_ID,
+      logger:     fastify.log,
+    });
+    console.log(`[BOOT] GCS staging  enabled=${storageService.enabled}  bucket=${env.UPLOAD_BUCKET || '(unset)'}`);
+    const uploadsService   = createUploadsService({ uploadsRepo, storageService, logger: fastify.log });
     // usersService receives refreshTokensRepo so password changes /
     // deactivations revoke every active refresh token for that user
     // (audit C2 fix). Wired here so the service has the dependency
