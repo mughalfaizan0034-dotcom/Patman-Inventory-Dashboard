@@ -18,7 +18,12 @@ export const env = {
 
   JWT_SECRET:          required('JWT_SECRET'),
   JWT_ACCESS_EXPIRES:  optional('JWT_ACCESS_EXPIRES',  '2h'),
-  JWT_REFRESH_EXPIRES: optional('JWT_REFRESH_EXPIRES', '7d'),
+  // Refresh-token TTL splits along the "Remember this device" flag:
+  //   - Unchecked       → JWT_REFRESH_EXPIRES           (7d default)
+  //   - Checked         → JWT_REFRESH_EXPIRES_REMEMBERED (30d default)
+  // Hard re-login is required at expiry — no sliding window.
+  JWT_REFRESH_EXPIRES:           optional('JWT_REFRESH_EXPIRES',           '7d'),
+  JWT_REFRESH_EXPIRES_REMEMBERED: optional('JWT_REFRESH_EXPIRES_REMEMBERED', '30d'),
 
   LOG_LEVEL: optional('LOG_LEVEL', 'info'),
 

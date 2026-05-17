@@ -13,6 +13,7 @@ export const TABLES = {
   USERS:             `${DATASETS.CORE}.users`,
   ACCESS_REQUESTS:   `${DATASETS.CORE}.access_requests`,
   SKU_CORRECTIONS:   `${DATASETS.CORE}.sku_corrections`,
+  REFRESH_TOKENS:    `${DATASETS.CORE}.refresh_tokens`,
 
   VALIDATION_ERRORS: `${DATASETS.LOGS}.validation_errors`,
   DEBUG_LOGS:        `${DATASETS.LOGS}.debug_logs`,
