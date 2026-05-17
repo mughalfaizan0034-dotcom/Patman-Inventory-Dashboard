@@ -1073,6 +1073,7 @@ const Settings = (() => {
     if (isSelf || isActive) return;
     const user = _usersCache.find(u => u.user_id === userId);
     const username = user?.username || displayName;
+    let result;
     const confirmed = await _typeToConfirm({
       title: 'Remove User Permanently',
       bodyHtml: `
@@ -1087,20 +1088,18 @@ const Settings = (() => {
         </p>`,
       requiredText: username,
       confirmText:  'Remove Permanently',
+      onConfirm: async () => {
+        result = await API.permanentDeleteUser(userId);
+      },
     });
     if (!confirmed) return;
-    try {
-      const result = await API.permanentDeleteUser(userId);
-      Notify.success(
-        'User deleted',
-        `@${username} removed (${result?.memberships_deleted ?? 0} memberships, ${result?.tokens_deleted ?? 0} tokens).`,
-      );
-      m.hide();
-      m.destroy();
-      loadUsers();
-    } catch (err) {
-      Notify.apiError(err);
-    }
+    Notify.success(
+      'User deleted',
+      `@${username} removed (${result?.memberships_deleted ?? 0} memberships, ${result?.tokens_deleted ?? 0} tokens).`,
+    );
+    m.hide();
+    m.destroy();
+    loadUsers();
   }
 
   async function _doEditUser(m, q, qf, userId, isSelf) {
@@ -1475,6 +1474,7 @@ const Settings = (() => {
   // delete button. Server enforces is_active=false + not-current-org
   // gates independently — UI is the convenience layer.
   async function _doPermanentDeleteOrg(m, orgId, orgName) {
+    let result;
     const confirmed = await _typeToConfirm({
       title: 'Remove Organization Permanently',
       bodyHtml: `
@@ -1489,26 +1489,40 @@ const Settings = (() => {
         </p>`,
       requiredText: orgName,
       confirmText:  'Remove Permanently',
+      // Async mode — modal stays open with spinner during the multi-
+      // second BQ cascade so the operator gets clear feedback instead
+      // of wondering whether the click registered.
+      onConfirm: async () => {
+        result = await API.permanentDeleteOrganization(orgId);
+      },
     });
     if (!confirmed) return;
 
-    try {
-      const result = await API.permanentDeleteOrganization(orgId);
-      Notify.success(
-        'Organization deleted',
-        `"${orgName}" and all its data removed (${result?.memberships_deleted ?? 0} memberships, ${(result?.tables_cleared || []).length} tables cleared).`,
-      );
-      m.hide();
-      m.destroy();
-      loadOrganizations();
-    } catch (err) {
-      Notify.apiError(err);
-    }
+    Notify.success(
+      'Organization deleted',
+      `"${orgName}" and all its data removed (${result?.memberships_deleted ?? 0} memberships, ${(result?.tables_cleared || []).length} tables cleared).`,
+    );
+    m.hide();
+    m.destroy();
+    loadOrganizations();
   }
 
   // Reusable type-to-confirm modal. Used by destructive permanent-
-  // delete flows. Returns a Promise<boolean>.
-  function _typeToConfirm({ title, bodyHtml, requiredText, confirmText = 'Delete' }) {
+  // delete flows. Two modes:
+  //
+  //   1. Without onConfirm:  resolves Promise<boolean> when the user
+  //      clicks confirm/cancel. Caller runs the async work AFTER the
+  //      modal closes — older flow, leaves a gap of dead UI while
+  //      the API call runs.
+  //
+  //   2. With onConfirm:     stays OPEN while the async onConfirm()
+  //      runs. The confirm button switches to a spinner + 'Removing…'
+  //      and inputs/buttons disable. On resolution the modal closes
+  //      automatically. On rejection the error is surfaced and the
+  //      modal restores so the operator can retry. Used by the
+  //      permanent-delete flows so the operator sees clear feedback
+  //      during the multi-second BQ cascade.
+  function _typeToConfirm({ title, bodyHtml, requiredText, confirmText = 'Delete', onConfirm = null }) {
     return new Promise(resolve => {
       const m = new Modal({
         title,
@@ -1526,7 +1540,41 @@ const Settings = (() => {
         okBtn.disabled = (input.value !== requiredText);
       });
       cxBtn.addEventListener('click', () => { m.hide(); m.destroy(); resolve(false); });
-      okBtn.addEventListener('click', () => { m.hide(); m.destroy(); resolve(true); });
+
+      okBtn.addEventListener('click', async () => {
+        if (!onConfirm) {
+          m.hide(); m.destroy(); resolve(true);
+          return;
+        }
+        // Async mode — stay open, show loading state, run onConfirm.
+        const origHtml = okBtn.innerHTML;
+        okBtn.disabled = true;
+        cxBtn.disabled = true;
+        if (input) input.disabled = true;
+        okBtn.innerHTML = `
+          <span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:ttc-spin .8s linear infinite;vertical-align:-2px;margin-right:8px"></span>
+          Removing…`;
+        // Inject the keyframe once (cheap, idempotent — same id collapses).
+        if (!document.getElementById('ttc-spin-style')) {
+          const s = document.createElement('style');
+          s.id = 'ttc-spin-style';
+          s.textContent = `@keyframes ttc-spin { to { transform: rotate(360deg); } }`;
+          document.head.appendChild(s);
+        }
+        try {
+          await onConfirm();
+          m.hide();
+          m.destroy();
+          resolve(true);
+        } catch (err) {
+          Notify.apiError(err);
+          // Restore so the operator can retry without re-typing.
+          okBtn.disabled = false;
+          cxBtn.disabled = false;
+          if (input) input.disabled = false;
+          okBtn.innerHTML = origHtml;
+        }
+      });
     });
   }
 

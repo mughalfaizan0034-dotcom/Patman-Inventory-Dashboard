@@ -216,13 +216,17 @@ export function createUsersService({ usersRepo, membershipsRepo, usernameService
     if (user.is_active !== false) {
       throw new AppError(409, 'User must be removed (deactivated) first. Open the Edit dialog, click Remove, then return to delete permanently.');
     }
-    // Cascade: memberships first (FK-like dependency), then refresh
-    // tokens, then the user row last.
-    const membershipsDeleted = await membershipsRepo.deleteAllByUserId(userId);
-    const tokensDeleted      = refreshTokensRepo?.deleteAllByUserId
-      ? await refreshTokensRepo.deleteAllByUserId(userId)
-      : 0;
-    const userDeleted        = await usersRepo.hardDeleteUser(userId);
+    // Cascade memberships + refresh tokens in PARALLEL — no FK between
+    // them, so wall-clock is the slower of the two (~1-2s) instead of
+    // their sum. The users row deletes LAST so a partial cascade
+    // failure leaves the user discoverable for retry.
+    const [membershipsDeleted, tokensDeleted] = await Promise.all([
+      membershipsRepo.deleteAllByUserId(userId),
+      refreshTokensRepo?.deleteAllByUserId
+        ? refreshTokensRepo.deleteAllByUserId(userId)
+        : Promise.resolve(0),
+    ]);
+    const userDeleted = await usersRepo.hardDeleteUser(userId);
     return {
       user_deleted:        userDeleted,
       memberships_deleted: membershipsDeleted,
