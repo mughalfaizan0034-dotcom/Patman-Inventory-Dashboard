@@ -873,90 +873,6 @@ const Settings = (() => {
     }
   }
 
-  /* ── Users: add existing ────────────────────────────────── */
-  function _openAddExistingModal() {
-    const m = new Modal({ title: 'Assign Existing User to Org', maxWidth: '440px' });
-    m.setBody(`
-      <p style="font-size:13px;color:var(--txt-3);margin-bottom:14px">
-        Search for a user already in the system and assign them to this organization.
-      </p>
-      <div class="form-group">
-        <label class="form-label">Username <span class="req">*</span></label>
-        <div style="display:flex;gap:8px">
-          <input class="form-input" id="ae-username" placeholder="Exact username" style="flex:1" autocomplete="off">
-          <button class="btn btn-secondary btn-sm" id="ae-search-btn">Find</button>
-        </div>
-      </div>
-      <div id="ae-found" style="display:none;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:10px">
-        <div style="font-weight:600;font-size:13px;color:var(--txt-1)" id="ae-found-name"></div>
-        <div style="font-size:12px;color:var(--txt-3)" id="ae-found-username"></div>
-      </div>
-      <div id="ae-role-wrap" class="form-group" style="display:none">
-        <label class="form-label">Role in this organization</label>
-        <select class="form-select" id="ae-role">${_roleOptions('viewer')}</select>
-      </div>
-      <div id="ae-error" class="form-error" style="display:none"></div>`);
-    m.setFooter(`
-      <button class="btn btn-secondary btn-sm" id="ae-cancel">Cancel</button>
-      <button class="btn btn-primary btn-sm" id="ae-add-btn" disabled>Assign to Org</button>`);
-    m.show();
-
-    let _foundUserId = null;
-    const errEl  = () => document.getElementById('ae-error');
-    const showErr = msg => { const e = errEl(); if (e) { e.textContent = msg; e.style.display = 'block'; } };
-    const hideErr = ()  => { const e = errEl(); if (e) e.style.display = 'none'; };
-
-    document.getElementById('ae-cancel')?.addEventListener('click', () => m.hide());
-
-    const addBtn = document.getElementById('ae-add-btn');
-
-    async function _doSearch() {
-      const username = document.getElementById('ae-username')?.value.trim().toLowerCase().replace(/^@/, '');
-      if (!username) return showErr('Enter a username to search.');
-      hideErr();
-      const searchBtn = document.getElementById('ae-search-btn');
-      Loading.btn(searchBtn, true);
-      _foundUserId = null;
-      if (addBtn) addBtn.disabled = true;
-      document.getElementById('ae-found').style.display     = 'none';
-      document.getElementById('ae-role-wrap').style.display = 'none';
-      try {
-        const user = await API.searchUser(username);
-        _foundUserId = user.user_id;
-        document.getElementById('ae-found-name').textContent     = user.display_name || user.username;
-        document.getElementById('ae-found-username').textContent = '@' + user.username;
-        document.getElementById('ae-found').style.display        = 'block';
-        document.getElementById('ae-role-wrap').style.display    = 'block';
-        if (addBtn) addBtn.disabled = false;
-      } catch (err) {
-        showErr(err.status === 404 ? `No user found with username "${username}".` : (err.message || 'Search failed.'));
-      } finally {
-        Loading.btn(searchBtn, false);
-      }
-    }
-
-    document.getElementById('ae-search-btn')?.addEventListener('click', _doSearch);
-    document.getElementById('ae-username')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); _doSearch(); }
-    });
-
-    addBtn?.addEventListener('click', async () => {
-      if (!_foundUserId) return;
-      const role = document.getElementById('ae-role')?.value;
-      hideErr();
-      Loading.btn(addBtn, true);
-      try {
-        await API.addMembership(_foundUserId, role);
-        Notify.success('User assigned', 'User has been added to this organization.');
-        m.hide();
-        loadUsers();
-      } catch (err) {
-        showErr(err.message || 'Failed to assign user.');
-        Loading.btn(addBtn, false);
-      }
-    });
-  }
-
   // Singleton popover element for the Users table's "N organizations"
   // dropdown. Uses position:fixed so it isn't clipped by the .table-wrap
   // overflow that the row sits inside.
@@ -1118,9 +1034,14 @@ const Settings = (() => {
         <div data-field="error" class="form-error" style="display:none"></div>
       </form>`);
 
+    // Footer matches the org edit modal pattern: Cancel · Remove (danger,
+    // self-disabled) · Save Changes. The Remove button calls the existing
+    // DELETE /users/:id endpoint which deactivates server-side — the row
+    // is preserved for audit and login is rejected for the disabled user.
     m.setFooter(`
       <button class="btn btn-secondary btn-sm" data-action="cancel">Cancel</button>
-      <button class="btn btn-primary btn-sm" data-action="save">Save Changes</button>`);
+      <button class="btn btn-danger    btn-sm" data-action="remove"${isSelf ? ' disabled title="You cannot remove your own account"' : ''}>Remove</button>
+      <button class="btn btn-primary   btn-sm" data-action="save">Save Changes</button>`);
     m.show();
 
     const q  = sel => m.bodyEl.querySelector(sel);
@@ -1128,11 +1049,32 @@ const Settings = (() => {
     const _hideAndDestroy = () => { m.hide(); m.destroy(); };
 
     qf('[data-action="cancel"]')?.addEventListener('click', _hideAndDestroy);
+    qf('[data-action="remove"]')?.addEventListener('click', () => _doRemoveUser(m, userId, user.display_name || user.username, isSelf));
     qf('[data-action="save"]')?.addEventListener('click', () => _doEditUser(m, q, qf, userId, isSelf));
     q('[data-form="edit-user"]')?.addEventListener('submit', e => { e.preventDefault(); _doEditUser(m, q, qf, userId, isSelf); });
 
     _wireMultiselect(q('[data-field="orgs"]'));
     Icons?.refresh?.();
+  }
+
+  async function _doRemoveUser(m, userId, displayName, isSelf) {
+    if (isSelf) return;
+    const confirmed = await Modal.confirm({
+      title:       'Remove User',
+      message:     `Remove "${displayName}"? They will no longer be able to log in. The account record is preserved for audit and can be reactivated later from this Edit dialog.`,
+      confirmText: 'Remove',
+      danger:      true,
+    });
+    if (!confirmed) return;
+    try {
+      await API.deleteUser(userId);
+      Notify.success('User removed', `"${displayName}" can no longer log in.`);
+      m.hide();
+      m.destroy();
+      loadUsers();
+    } catch (err) {
+      Notify.apiError(err);
+    }
   }
 
   async function _doEditUser(m, q, qf, userId, isSelf) {
@@ -1417,9 +1359,13 @@ const Settings = (() => {
           ${_renderSkuStructureSection(org.sku_structure, { required: true })}
           <div data-field="error" class="form-error" style="display:none"></div>
         </form>`);
+      // Footer: Cancel · Remove (was "Deactivate" pre-2026-05-18; renamed
+      // for consistency with the user edit modal's Remove action. Same
+      // underlying endpoint — PATCH with is_active=false — so the action
+      // remains a reversible soft-deactivation, not a hard delete.)
       m.setFooter(`
         <button class="btn btn-secondary btn-sm" data-action="cancel">Cancel</button>
-        <button class="btn btn-danger    btn-sm" data-action="deactivate"${isHere ? ' disabled title="Switch to another workspace before deactivating this one"' : ''}>Deactivate</button>
+        <button class="btn btn-danger    btn-sm" data-action="deactivate"${isHere ? ' disabled title="Switch to another workspace before removing this one"' : ''}>Remove</button>
         <button class="btn btn-primary   btn-sm" data-action="save">Save Changes</button>`);
     }
     m.show();
@@ -1472,15 +1418,15 @@ const Settings = (() => {
 
   async function _doDeactivateOrg(m, orgId, orgName) {
     const confirmed = await Modal.confirm({
-      title:       'Deactivate Organization',
-      message:     `Deactivate "${orgName}"? All members will lose access. You can reactivate it later from this Edit dialog.`,
-      confirmText: 'Deactivate',
+      title:       'Remove Organization',
+      message:     `Remove "${orgName}"? All members will lose access. The organization record is preserved for audit and can be reactivated later from this Edit dialog.`,
+      confirmText: 'Remove',
       danger:      true,
     });
     if (!confirmed) return;
     try {
       await API.updateOrganization(orgId, { is_active: false });
-      Notify.success('Organization deactivated');
+      Notify.success('Organization removed', `"${orgName}" is no longer accessible.`);
       m.hide();
       m.destroy();
       loadOrganizations();
@@ -1941,7 +1887,6 @@ const Settings = (() => {
     }
 
     document.getElementById('add-user-btn')?.addEventListener('click', _openAddNewUserModal);
-    document.getElementById('add-existing-user-btn')?.addEventListener('click', _openAddExistingModal);
     document.getElementById('add-org-btn')?.addEventListener('click', _openNewOrgModal);
 
     // Users table — event delegation

@@ -380,7 +380,6 @@ const API = (() => {
 
     /* Users / Memberships */
     async getUsers()                         { return _crGet('/users'); },
-    async searchUser(username)               { return _crGet('/users/search', { username }); },
     async checkUsername(username)            { return _crGet('/users/check-username', { username }); },
     async createUser(userData)               { return _crPost('/users', userData); },
     async updateUser(membershipId, updates)  { return _crPatch(`/users/${membershipId}`, updates); },
@@ -388,7 +387,6 @@ const API = (() => {
 
     /* Memberships */
     async getMemberships()                   { return _crGet('/memberships'); },
-    async addMembership(userId, role)        { return _crPost('/memberships', { user_id: userId, role }); },
     async updateMembership(id, updates)      { return _crPatch(`/memberships/${id}`, updates); },
     async removeMembership(id)               { return _crDelete(`/memberships/${id}`); },
 
