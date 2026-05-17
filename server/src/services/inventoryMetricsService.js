@@ -44,13 +44,19 @@ import { ordersAggCTE, invAggCTE, perSkuCTE } from '../utils/skuPivots.js';
  *   Units Sold  = Sold matched + Unknown                   (orders)
  *               = Fulfilled + Phantom + Unknown            (combining)
  */
-// Parity logging for the SKU View read path. Mirrors the dashboard
-// parity logger — runs the materialized-table read in parallel with
-// the live CTE, diffs the two row sets, and logs match / diff / missing
-// to Cloud Logging. ENABLE in a single Cloud Run revision (set
-// SUMMARY_PARITY_LOG=1) for ~24h before flipping SKU View read path
-// to inventory_summary in Phase B.
+// Parity logging for the SKU View read path. POST-cutover semantics:
+//   - When READ_SKU_FROM_SUMMARY is ON (default), the request reads
+//     from inventory_summary. If SUMMARY_PARITY_LOG=1, the LIVE CTE
+//     runs in parallel as the parity probe.
+//   - When READ_SKU_FROM_SUMMARY is OFF (rollback), the request reads
+//     from the live CTE. If SUMMARY_PARITY_LOG=1, inventory_summary
+//     runs in parallel as the parity probe (pre-cutover semantics).
 const PARITY_LOG = process.env.SUMMARY_PARITY_LOG === '1';
+
+// Phase B read-path cutover. Default ON: SKU View reads from
+// inventory_summary. Flip to '0' on the Cloud Run revision to roll
+// back to the live CTE path without redeploying any code.
+const READ_FROM_SUMMARY = process.env.READ_SKU_FROM_SUMMARY !== '0';
 
 export function createInventoryMetricsService({ bq, projectId, orgsRepo, logger }) {
   const invTable         = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -371,6 +377,61 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo, logger 
       ${whereCond}
     `;
 
+    // ── Phase B read-path: summary first, live as fallback ───────────────
+    if (READ_FROM_SUMMARY) {
+      try {
+        const summary = await _readSkuSummaryFromTable(organizationId, {
+          search, status, sortBy, sortDir, page, pageSize,
+        });
+
+        // Post-cutover parity probe (reverse direction): the LIVE CTE
+        // runs in parallel against the summary read that served the
+        // request. Lets operators verify drift after cutover.
+        if (PARITY_LOG) {
+          (async () => {
+            try {
+              const [rows, countRows] = await Promise.all([
+                bq.query({ query: dataQuery,  params }),
+                bq.query({ query: countQuery, params }),
+              ]);
+              const liveItems = rows[0].map(r => ({
+                ...r,
+                total_stock:     Number(r.total_stock     ?? 0),
+                sold_units:      Number(r.sold_units      ?? 0),
+                fulfilled_units: Number(r.fulfilled_units ?? 0),
+                phantom_units:   Number(r.phantom_units   ?? 0),
+                remaining_units: Number(r.remaining_units ?? 0),
+                boxes_count:     Number(r.boxes_count     ?? 0),
+                is_undefined:    !!r.is_undefined,
+              }));
+              const liveTotal = Number(countRows[0][0]?.total ?? 0);
+              const diff = _diffSkuItems(liveItems, summary.items);
+              if (summary.total !== liveTotal || diff) {
+                logger?.warn?.(
+                  { event: 'parity_sku_diff_post_cutover', organization_id: organizationId, live_total: liveTotal, summary_total: summary.total, diff_sample: diff ? { onlyInLive: diff.onlyInLive.slice(0,3), onlyInSummary: diff.onlyInSummary.slice(0,3), valueDiffs: diff.valueDiffs.slice(0,5) } : null },
+                  'POST-CUTOVER: inventory_summary disagrees with live CTE',
+                );
+              } else {
+                logger?.info?.(
+                  { event: 'parity_sku_match', organization_id: organizationId, page_items: summary.items.length, total_skus: summary.total, post_cutover: true },
+                  'inventory_summary matches live CTE (post-cutover probe)',
+                );
+              }
+            } catch { /* swallow — probe must not affect requests */ }
+          })();
+        }
+
+        return { items: summary.items, total: summary.total };
+      } catch (err) {
+        logger?.warn?.(
+          { event: 'sku_summary_read_failed', organization_id: organizationId, err: err?.message },
+          'inventory_summary read failed — falling back to live CTE',
+        );
+        // fall through to live CTE
+      }
+    }
+
+    // ── Live CTE path (rollback / fallback) ──────────────────────────────
     try {
       const [rows, countRows] = await Promise.all([
         bq.query({ query: dataQuery,  params }),
@@ -389,9 +450,7 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo, logger 
       }));
       const liveTotal = Number(countRows[0][0]?.total ?? 0);
 
-      // Phase A parity probe: run a parallel read from inventory_summary
-      // with the same filter/sort/pagination, diff the row sets, log.
-      // Never blocks the live response.
+      // Pre-cutover style parity probe (when rolled back).
       if (PARITY_LOG) {
         _skuSummaryParityProbe(organizationId, {
           search, status, sortBy, sortDir, page, pageSize,
@@ -468,6 +527,9 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo, logger 
         remaining_units: Number(r.remaining_units ?? 0),
         boxes_count:     Number(r.boxes_count     ?? 0),
         is_undefined:    !!r.is_undefined,
+        last_added_at:   r.last_added_at?.value ?? r.last_added_at ?? null,
+        part_number:     r.part_number ?? null,
+        upc:             r.upc ?? null,
       })),
       total: Number(countRows[0][0]?.total ?? 0),
     };

@@ -31,15 +31,27 @@ function weekLabel(dateVal) {
 // row-by-org SELECT and the cache is mostly redundant.
 const KPI_TTL_MS = 60 * 1000;
 
-// Parity logging mode (Phase A of materialized summaries rollout).
-// When SUMMARY_PARITY_LOG=1, every getKPIs call ALSO reads from
-// dashboard_summary and logs a structured diff between the two. Returns
-// the LIVE CTE result regardless. Use this to verify the materialized
-// rebuild matches the live calculation before Phase B cutover.
-//
-// Default: OFF. Enable in staging / a single Cloud Run revision until
-// observed diffs = 0 for at least a day, then ship the read-path cutover.
+// Parity logging mode. POST-cutover semantics (Phase B):
+//   - When READ_FROM_SUMMARY is ON (default), the request reads from
+//     dashboard_summary. If SUMMARY_PARITY_LOG=1, the LIVE CTE runs in
+//     parallel as the parity probe (reverse of pre-cutover).
+//   - When READ_FROM_SUMMARY is OFF (rollback), the request reads from
+//     live CTE. If SUMMARY_PARITY_LOG=1, dashboard_summary runs in
+//     parallel as the parity probe (pre-cutover semantics).
+// Either way, parity logging is available for drift investigation after
+// the read-path cutover.
 const PARITY_LOG = process.env.SUMMARY_PARITY_LOG === '1';
+
+// Phase B read-path cutover. Default ON: dashboard KPIs come from
+// dashboard_summary. Flip to '0' on the Cloud Run revision to roll back
+// to the live CTE path without redeploying any code.
+//
+// Auto-fallback: if the summary row is missing for an org (e.g. brand
+// new org before its first refresh), this transparently falls back to
+// the live CTE so the dashboard never goes dark. The fallback is logged
+// at warn level — operator should hit /admin/summary-refresh for that
+// org or wait for the next mutation to trigger a refresh.
+const READ_FROM_SUMMARY = process.env.READ_DASHBOARD_FROM_SUMMARY !== '0';
 
 // Numeric fields compared in parity mode. Order matches the dashboard
 // frontend KPI_MAP so diffs read in the same order as the UI.
@@ -72,8 +84,11 @@ export function createDashboardService({ dashboardRepo, metricsService, bq, proj
   }
 
   // Read a single row out of dashboard_summary. Returns null on miss / error
-  // so parity logging never fails the request. Mapped to the same field
-  // names that computeSummary returns, for direct comparison.
+  // so callers can transparently fall back to the live CTE path. Mapped to
+  // the EXACT shape returned by computeSummary — including the derived
+  // fields (soldUnitsMatched, actualUnitsSold, remainingStock alias,
+  // ignoredOrders) so downstream renderers see one stable contract
+  // regardless of which read path served the request.
   async function _readFromSummary(organizationId) {
     if (!bq || !dashboardSummaryTable) return null;
     try {
@@ -92,28 +107,43 @@ export function createDashboardService({ dashboardRepo, metricsService, bq, proj
       });
       const r = rows[0];
       if (!r) return null;
+      const fulfilledUnits         = Number(r.fulfilled_units          ?? 0);
+      const phantomUnits           = Number(r.phantom_units            ?? 0);
+      const physicalRemainingUnits = Number(r.physical_remaining_units ?? 0);
+      // soldUnitsMatched = fulfilled + phantom (per-SKU pivot identity)
+      const soldUnitsMatched       = fulfilledUnits + phantomUnits;
       return {
+        // Inventory KPIs
         totalSkus:              Number(r.total_skus               ?? 0),
         totalUnits:             Number(r.total_units              ?? 0),
-        fulfilledUnits:         Number(r.fulfilled_units          ?? 0),
-        phantomUnits:           Number(r.phantom_units            ?? 0),
-        physicalRemainingUnits: Number(r.physical_remaining_units ?? 0),
+        soldUnitsMatched,
+        actualUnitsSold:        fulfilledUnits,
+        fulfilledUnits,
+        physicalRemainingUnits,
+        phantomUnits,
         inStockSkus:            Number(r.in_stock_skus            ?? 0),
         oosSkus:                Number(r.oos_skus                 ?? 0),
         phantomSkus:            Number(r.phantom_skus             ?? 0),
         undefinedSkus:          Number(r.undefined_skus           ?? 0),
+        // Sales KPIs
         unitsSold:              Number(r.units_sold_raw           ?? 0),
         unknownUnitsSold:       Number(r.unknown_units_sold       ?? 0),
         unknownOrders:          Number(r.unknown_orders           ?? 0),
         wrongPartUnits:         Number(r.wrong_part_units         ?? 0),
         totalOrders:            Number(r.total_orders             ?? 0),
         activePlatforms:        Number(r.active_platforms         ?? 0),
+        ignoredOrders:          0,
+        // Aliases used by existing frontend field references
+        remainingStock:         physicalRemainingUnits,
+        // Provenance + freshness signal (used by parity probes and admin UI)
         refreshed_at:           r.refreshed_at?.value ?? r.refreshed_at ?? null,
+        _source:                'summary',
       };
     } catch (err) {
-      // Missing table during Phase A rollout is expected — log once at
-      // debug, not warn, so it doesn't spam.
-      logger?.debug?.({ event: 'parity_summary_read_failed', err: err?.message }, 'dashboard_summary unreadable');
+      logger?.warn?.(
+        { event: 'summary_read_failed', organization_id: organizationId, err: err?.message },
+        'dashboard_summary read failed — falling back to live CTE',
+      );
       return null;
     }
   }
@@ -133,11 +163,62 @@ export function createDashboardService({ dashboardRepo, metricsService, bq, proj
     const cached = _cacheGet(organizationId);
     if (cached) return cached;
 
+    // ── Phase B read-path: summary first, live as fallback ──────────────
+    if (READ_FROM_SUMMARY) {
+      const summary = await _readFromSummary(organizationId);
+      if (summary) {
+        _cacheSet(organizationId, summary);
+
+        // Post-cutover parity probe (reverse direction): the LIVE CTE
+        // runs in parallel and we diff against the summary that just
+        // served the request. Lets operators continue verifying drift
+        // after cutover without affecting response latency.
+        if (PARITY_LOG) {
+          metricsService.computeSummary(organizationId).then(live => {
+            const diff = _diffParity(live, summary);
+            if (diff && !diff.missing) {
+              logger?.warn?.(
+                { event: 'parity_diff_post_cutover', organization_id: organizationId, diffs: diff, summary_refreshed_at: summary.refreshed_at },
+                'POST-CUTOVER: dashboard_summary disagrees with live CTE',
+              );
+            } else {
+              logger?.info?.(
+                {
+                  event: 'parity_match',
+                  organization_id: organizationId,
+                  summary_refreshed_at: summary.refreshed_at,
+                  live_total_skus:     live.totalSkus,
+                  live_total_units:    live.totalUnits,
+                  live_total_orders:   live.totalOrders,
+                  post_cutover:        true,
+                },
+                'dashboard_summary matches live CTE (post-cutover probe)',
+              );
+            }
+          }).catch(() => {});
+        }
+
+        return summary;
+      }
+
+      // Auto-fallback: no summary row yet for this org (brand new org,
+      // or refresh has never run). Drop through to the live CTE so the
+      // dashboard never goes dark. Logged once so the operator can
+      // schedule a /admin/summary-refresh.
+      logger?.warn?.(
+        { event: 'summary_missing_fallback', organization_id: organizationId },
+        'dashboard_summary row missing — serving from live CTE instead. Run /admin/summary-refresh for this org.',
+      );
+    }
+
+    // ── Live CTE path (rollback / fallback) ──────────────────────────────
     const fresh = await metricsService.computeSummary(organizationId);
+    fresh._source = 'live';
     _cacheSet(organizationId, fresh);
 
-    // Phase A parity logging (off by default). Fire-and-forget — never
-    // delay the response on the parity read.
+    // Pre-cutover style parity probe: when reading from live, compare
+    // against summary in parallel. Useful when rolled back to live to
+    // verify the summary table would have served the same answer.
     if (PARITY_LOG) {
       _readFromSummary(organizationId).then(summary => {
         const diff = _diffParity(fresh, summary);
@@ -152,9 +233,6 @@ export function createDashboardService({ dashboardRepo, metricsService, bq, proj
             'dashboard_summary disagrees with live CTE — investigate refresh logic',
           );
         } else {
-          // Sample-size hint: include the per-KPI numbers so a 24h
-          // aggregate query in /admin/parity-report can sum them and
-          // report total units / orders observed across the window.
           logger?.info?.(
             {
               event: 'parity_match',
