@@ -341,5 +341,14 @@ const API = (() => {
     /* System */
     async ping()              { return _crGet('/health'); },
     async getSystemStatus()   { return _crGet('/health'); },
+
+    /* Admin diagnostics — admin-role only.
+       Used by Settings → System Status → Admin Operations panel for
+       the Phase B parity-validation workflow. */
+    async adminRefreshAllOrgs()                     { return _crPost('/admin/refresh-all-orgs', {}); },
+    async adminRefreshOrg(organizationId)           { return _crPost('/admin/summary-refresh', { organization_id: organizationId }); },
+    async adminSummaryStatus(organizationId)        { return _crGet('/admin/summary-status', organizationId ? { org: organizationId } : {}); },
+    async adminParityReport(hours = 24)             { return _crGet('/admin/parity-report', { hours }); },
+    async adminRefreshHealth(hours = 24)            { return _crGet('/admin/refresh-health', { hours }); },
   };
 })();
