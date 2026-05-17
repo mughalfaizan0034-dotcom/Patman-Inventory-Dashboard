@@ -110,8 +110,28 @@ export async function buildApp() {
   });
 
   fastify.register(helmet, { global: true });
+
+  // ── CORS ────────────────────────────────────────────────────────────
+  // The production GitHub Pages frontend is pinned here so a missing /
+  // misconfigured Cloud Run env var can never break the live site. Any
+  // additional origins (dev, preview deployments) come from CORS_ORIGIN.
+  // No `credentials` — we use JWT in the Authorization header, no cookies.
+  const HARDCODED_ALLOWED = new Set([
+    'https://mughalfaizan0034-dotcom.github.io',
+  ]);
+  const envAllowed     = new Set(env.CORS_ORIGIN.filter(o => o !== '*'));
+  const wildcardAllowed = env.CORS_ORIGIN.includes('*');
+  console.log(`[BOOT] CORS allowlist  hardcoded=[${[...HARDCODED_ALLOWED].join(',')}]  env=[${[...envAllowed].join(',')}]  wildcard=${wildcardAllowed}`);
+
   fastify.register(cors, {
-    origin:  env.CORS_ORIGIN,
+    origin: (origin, cb) => {
+      // Non-browser requests (curl, server-to-server) carry no Origin —
+      // allow so health checks and internal probes pass through cleanly.
+      if (!origin) return cb(null, true);
+      if (wildcardAllowed) return cb(null, true);
+      if (HARDCODED_ALLOWED.has(origin) || envAllowed.has(origin)) return cb(null, true);
+      return cb(null, false);
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });

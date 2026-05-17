@@ -22,8 +22,12 @@ export const env = {
 
   LOG_LEVEL: optional('LOG_LEVEL', 'info'),
 
-  // Comma-separated list → array for @fastify/cors
-  CORS_ORIGIN: optional('CORS_ORIGIN', '*')
+  // Comma-separated list of EXTRA allowed origins. The production
+  // GitHub Pages frontend is hardcoded in server.js so it cannot be
+  // dropped by a missing/misconfigured Cloud Run env var. Use this
+  // env for dev (e.g. http://localhost:3000) or preview deployments.
+  // The literal string '*' enables the dev-only wildcard.
+  CORS_ORIGIN: optional('CORS_ORIGIN', '')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean),

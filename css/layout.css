@@ -438,6 +438,26 @@ body.sidebar-mobile-open .sidebar-backdrop {
   overflow: hidden;
 }
 
+/* System Status tab: same viewport-fit pattern as Inventory / Orders.
+   The tab-panel doesn't scroll; the card fills it and the inner content
+   region scrolls internally if the diagnostics rows overflow. Keeps the
+   page free of an outer scrollbar regardless of admin tooling height. */
+#page-settings #tab-system.tab-panel.active {
+  overflow: hidden;
+}
+#tab-system > .card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#tab-system > .card > .card-header { flex-shrink: 0; }
+#tab-system #system-status-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .settings-logs-card {
   display: flex;
   flex-direction: column;
