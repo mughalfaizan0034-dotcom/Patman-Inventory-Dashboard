@@ -30,4 +30,11 @@ export const inventoryImporter = {
   async logUpload(uploadsRepo, meta) {
     await uploadsRepo.logInventoryUpload(meta);
   },
+
+  // Phase B (2026-05-18): BigQuery LOAD JOB ingest from a GCS NDJSON
+  // source. Used for the Add path when storageService is enabled —
+  // drops 100k-row latency from ~5 min (DML chunks) to ~10-15s.
+  async loadFromGcsBatch(uploadsRepo, sourceUri) {
+    return uploadsRepo.loadInventoryFromGcs(sourceUri);
+  },
 };

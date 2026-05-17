@@ -30,4 +30,10 @@ export const ordersImporter = {
   async logUpload(uploadsRepo, meta) {
     await uploadsRepo.logOrderUpload(meta);
   },
+
+  // Phase B (2026-05-18): BigQuery LOAD JOB ingest from a GCS NDJSON
+  // source. Used for the Add path when storageService is enabled.
+  async loadFromGcsBatch(uploadsRepo, sourceUri) {
+    return uploadsRepo.loadOrdersFromGcs(sourceUri);
+  },
 };

@@ -523,6 +523,81 @@ export function createUploadsRepository({ bq, projectId }) {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // BigQuery LOAD JOB ingest (Phase B — 2026-05-18).
+  //
+  // Drops 100k-row Add latency from ~5 minutes (200 DML INSERT chunks)
+  // to ~10-15 seconds (one LOAD JOB). For 17k rows: ~30s → ~3s.
+  //
+  // Schemas mirror the inventory / orders DDL exactly. The LOAD JOB
+  // expects NDJSON where each line is a JSON object whose keys match
+  // column names. Order doesn't matter; missing nullable columns are
+  // accepted. TIMESTAMP columns accept ISO 8601 strings — the
+  // inventorySchema / ordersSchema already emit those at parse time.
+  //
+  // sourceUri: full gs://bucket/key path returned by storageService.
+  // ─────────────────────────────────────────────────────────────────────
+  const INVENTORY_LOAD_SCHEMA = [
+    { name: 'organization_id', type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'row_uid',         type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'sku',             type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'upc',             type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'part_number',     type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'box_number',      type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'quantity',        type: 'INT64',     mode: 'REQUIRED' },
+    { name: 'date_added',      type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'notes',           type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'updated_at',      type: 'TIMESTAMP', mode: 'NULLABLE' },
+  ];
+
+  const ORDERS_LOAD_SCHEMA = [
+    { name: 'order_row_id',    type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'organization_id', type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'order_id',        type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'order_date',      type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'sku',             type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'quantity_sold',   type: 'INT64',     mode: 'REQUIRED' },
+    { name: 'platform',        type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'shipped_sku',     type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'created_at',      type: 'TIMESTAMP', mode: 'NULLABLE' },
+  ];
+
+  async function _loadFromGcs({ datasetId, tableId, sourceUri, schema }) {
+    // The @google-cloud/bigquery client's load(uri, opts) returns once
+    // the job COMPLETES (success or failure). Failures surface via
+    // job.status.errors — we re-throw so the caller can fall back to
+    // the DML path or mark the upload failed.
+    const start = Date.now();
+    const [job] = await bq.dataset(datasetId).table(tableId).load(sourceUri, {
+      sourceFormat:        'NEWLINE_DELIMITED_JSON',
+      writeDisposition:    'WRITE_APPEND',
+      createDisposition:   'CREATE_NEVER',
+      schema:              { fields: schema },
+      ignoreUnknownValues: false,
+      maxBadRecords:       0,
+    });
+    const errors = job?.status?.errors ?? [];
+    if (errors.length) {
+      const msg = errors.map(e => e.message).join('; ');
+      throw new Error(`BigQuery LOAD JOB failed: ${msg}`);
+    }
+    return {
+      rows_added:  Number(job?.statistics?.load?.outputRows  ?? 0),
+      bytes:       Number(job?.statistics?.load?.outputBytes ?? 0),
+      duration_ms: Date.now() - start,
+    };
+  }
+
+  async function loadInventoryFromGcs(sourceUri) {
+    const [datasetId, tableId] = String(TABLES.INVENTORY).split('.');
+    return _loadFromGcs({ datasetId, tableId, sourceUri, schema: INVENTORY_LOAD_SCHEMA });
+  }
+
+  async function loadOrdersFromGcs(sourceUri) {
+    const [datasetId, tableId] = String(TABLES.ORDERS).split('.');
+    return _loadFromGcs({ datasetId, tableId, sourceUri, schema: ORDERS_LOAD_SCHEMA });
+  }
+
   return {
     getHistory, logInventoryUpload, logOrderUpload, getUploadReport,
     deleteInventory, insertInventoryBatch, insertOrdersBatch,
@@ -531,5 +606,7 @@ export function createUploadsRepository({ bq, projectId }) {
     deleteInventoryByRowUids, deleteOrdersByOrderIds,
     // Async upload lifecycle (Phase A — 2026-05-18)
     createUploadJob, setUploadProcessing, finalizeUploadJob, markUploadRefreshed, getUploadStatus,
+    // BigQuery LOAD JOB ingest (Phase B — 2026-05-18)
+    loadInventoryFromGcs, loadOrdersFromGcs,
   };
 }
