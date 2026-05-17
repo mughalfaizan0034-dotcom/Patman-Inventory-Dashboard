@@ -130,7 +130,7 @@ export async function buildApp() {
     const orgsRepo         = createOrganizationsRepository(deps);
     const usersRepo        = createUsersRepository(deps);
     const membershipsRepo  = createMembershipsRepository(deps);
-    const inventoryRepo    = createInventoryRepository({ ...deps, orgsRepo });
+    const inventoryRepo    = createInventoryRepository({ ...deps });
     const ordersRepo       = createOrdersRepository(deps);
     const dashboardRepo    = createDashboardRepository(deps);
     const uploadsRepo      = createUploadsRepository(deps);

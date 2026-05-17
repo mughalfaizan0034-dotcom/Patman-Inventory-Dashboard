@@ -1,96 +1,18 @@
 import { TABLES } from '../config/tables.js';
-import { isUndefinedRowSql } from '../utils/inventoryPatterns.js';
 import { effectiveSkuSql } from '../utils/skuPatterns.js';
 
-export function createInventoryRepository({ bq, projectId, orgsRepo }) {
+// Inventory repo. The canonical inventory READ path (SKU View + dashboard
+// KPIs) lives in inventoryMetricsService, which owns the centralized
+// allocation pivot. This repo owns:
+//   - mutating ops (PATCH / DELETE by row_uid)
+//   - the per-SKU drilldown (raw upload rows behind a single SKU)
+//   - the same-part-box alternatives lookup for order-row reassignment
+//
+// The legacy findAll/exportAll raw-list paths were removed when the
+// inventory page switched to SKU-aggregate mode (audit M6).
+export function createInventoryRepository({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
   const ordTable = `\`${projectId}.${TABLES.ORDERS}\``;
-
-  // Same regex resolver pattern as inventoryMetricsService — the Inventory
-  // List page's "Undefined SKUs" filter must use the SAME structure-aware
-  // classification as the dashboard so the two never disagree.
-  async function _resolveSkuRegex(organizationId) {
-    if (!orgsRepo?.getSkuRegex) return null;
-    try { return await orgsRepo.getSkuRegex(organizationId); }
-    catch { return null; }
-  }
-
-  async function findAll({ organizationId, page, pageSize, search, sortBy, sortDir, status = 'all' }) {
-    const offset = (page - 1) * pageSize;
-
-    const conditions = ['i.organization_id = @organizationId'];
-    const params     = { organizationId };
-
-    if (search) {
-      conditions.push('(LOWER(i.sku) = @search OR LOWER(i.upc) = @search OR LOWER(i.part_number) = @search)');
-      params.search = search.toLowerCase();
-    }
-
-    if (status === 'undefined') {
-      const skuRegex = await _resolveSkuRegex(organizationId);
-      if (skuRegex) params.sku_regex = skuRegex;
-      conditions.push(isUndefinedRowSql('i', skuRegex ? { regexParam: 'sku_regex' } : {}));
-    }
-
-    const where = `WHERE ${conditions.join(' AND ')}`;
-
-    const sortMap = {
-      sku:             'i.sku',
-      upc:             'i.upc',
-      box_number:      'i.box_number',
-      quantity:        'i.quantity',
-      date_added:      'i.date_added',
-      part_number:     'i.part_number',
-      notes:           'i.notes',
-      remaining_stock: 'remaining_stock',
-    };
-    const col = sortMap[sortBy] || 'i.date_added';
-    const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
-
-    // Inventory List shows only Initial + Remaining for inventory count.
-    // Stock-based filters still need the JOIN to compute remaining_stock,
-    // but we no longer surface fulfilled / phantom values to the client.
-    const needsStockFilter = status === 'in_stock' || status === 'oos';
-    const stockCond = needsStockFilter
-      ? `AND (i.quantity - COALESCE(o.units_sold, 0)) ${status === 'in_stock' ? '> 0' : '= 0'}`
-      : '';
-
-    const cte = `
-      WITH ord_summary AS (
-        SELECT
-          ${effectiveSkuSql()} AS effective_sku,
-          SUM(quantity_sold) AS units_sold
-        FROM ${ordTable}
-        WHERE organization_id = @organizationId
-        GROUP BY effective_sku
-      )`;
-
-    const dataQuery = `
-      ${cte}
-      SELECT
-        i.row_uid, i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
-        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
-      FROM ${invTable} i
-      LEFT JOIN ord_summary o ON i.sku = o.effective_sku
-      ${where} ${stockCond}
-      ORDER BY ${col} ${dir}
-      LIMIT ${pageSize} OFFSET ${offset}
-    `;
-
-    const countQuery = needsStockFilter
-      ? `${cte} SELECT COUNT(*) AS total FROM ${invTable} i LEFT JOIN ord_summary o ON i.sku = o.effective_sku ${where} ${stockCond}`
-      : `SELECT COUNT(*) AS total FROM ${invTable} i ${where}`;
-
-    const [rows, countRows] = await Promise.all([
-      bq.query({ query: dataQuery, params }),
-      bq.query({ query: countQuery, params }),
-    ]);
-
-    return {
-      items: rows[0],
-      total: Number(countRows[0][0]?.total ?? 0),
-    };
-  }
 
   // Delete by row_uid — the canonical tracker. SKU is NOT the row key
   // anymore (multiple rows can share a SKU).
@@ -215,66 +137,6 @@ export function createInventoryRepository({ bq, projectId, orgsRepo }) {
     };
   }
 
-  async function exportAll({ organizationId, search, sortBy, sortDir, status = 'all' }) {
-    const conditions = ['i.organization_id = @organizationId'];
-    const params     = { organizationId };
-
-    if (search) {
-      conditions.push('(LOWER(i.sku) = @search OR LOWER(i.upc) = @search OR LOWER(i.part_number) = @search)');
-      params.search = search.toLowerCase();
-    }
-
-    if (status === 'undefined') {
-      const skuRegex = await _resolveSkuRegex(organizationId);
-      if (skuRegex) params.sku_regex = skuRegex;
-      conditions.push(isUndefinedRowSql('i', skuRegex ? { regexParam: 'sku_regex' } : {}));
-    }
-
-    const where = `WHERE ${conditions.join(' AND ')}`;
-
-    const sortMap = {
-      sku:             'i.sku',
-      upc:             'i.upc',
-      box_number:      'i.box_number',
-      quantity:        'i.quantity',
-      date_added:      'i.date_added',
-      part_number:     'i.part_number',
-      notes:           'i.notes',
-      remaining_stock: 'remaining_stock',
-    };
-    const col = sortMap[sortBy] || 'i.date_added';
-    const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
-
-    const needsStockFilter = status === 'in_stock' || status === 'oos';
-    const stockCond = needsStockFilter
-      ? `AND (i.quantity - COALESCE(o.units_sold, 0)) ${status === 'in_stock' ? '> 0' : '= 0'}`
-      : '';
-
-    const cte = `
-      WITH ord_summary AS (
-        SELECT
-          ${effectiveSkuSql()} AS effective_sku,
-          SUM(quantity_sold) AS units_sold
-        FROM ${ordTable}
-        WHERE organization_id = @organizationId
-        GROUP BY effective_sku
-      )`;
-
-    const query = `
-      ${cte}
-      SELECT
-        i.row_uid, i.sku, i.upc, i.part_number, i.box_number, i.quantity, i.date_added, i.notes,
-        GREATEST(i.quantity - COALESCE(o.units_sold, 0), 0) AS remaining_stock
-      FROM ${invTable} i
-      LEFT JOIN ord_summary o ON i.sku = o.effective_sku
-      ${where} ${stockCond}
-      ORDER BY ${col} ${dir}
-    `;
-
-    const [rows] = await bq.query({ query, params });
-    return rows;
-  }
-
   // Raw inventory rows for a single SKU — used by the Inventory (SKU View)
   // drilldown. Returns every upload entry behind the aggregated row so the
   // operator can audit / edit / delete individual rows. This is the ONLY
@@ -296,5 +158,5 @@ export function createInventoryRepository({ bq, projectId, orgsRepo }) {
     }));
   }
 
-  return { findAll, exportAll, deleteByRowUids, updateRow, findAlternativeBoxes, findRawRowsBySku };
+  return { deleteByRowUids, updateRow, findAlternativeBoxes, findRawRowsBySku };
 }
