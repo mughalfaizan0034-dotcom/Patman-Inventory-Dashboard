@@ -152,8 +152,18 @@ export function createDashboardService({ dashboardRepo, metricsService, bq, proj
             'dashboard_summary disagrees with live CTE — investigate refresh logic',
           );
         } else {
+          // Sample-size hint: include the per-KPI numbers so a 24h
+          // aggregate query in /admin/parity-report can sum them and
+          // report total units / orders observed across the window.
           logger?.info?.(
-            { event: 'parity_match', organization_id: organizationId, summary_refreshed_at: summary.refreshed_at },
+            {
+              event: 'parity_match',
+              organization_id: organizationId,
+              summary_refreshed_at: summary.refreshed_at,
+              live_total_skus:     fresh.totalSkus,
+              live_total_units:    fresh.totalUnits,
+              live_total_orders:   fresh.totalOrders,
+            },
             'dashboard_summary matches live CTE',
           );
         }

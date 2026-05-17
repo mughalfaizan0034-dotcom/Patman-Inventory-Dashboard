@@ -173,7 +173,7 @@ export async function buildApp() {
     fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo, usersRepo, summaryRefreshService });
     fastify.register(activityRoutes,      { prefix: '/activity',      activityService });
     fastify.register(lookupRoutes,        { prefix: '/lookup',        lookupService });
-    fastify.register(adminRoutes,         { prefix: '/admin',         ...deps, summaryRefreshService });
+    fastify.register(adminRoutes,         { prefix: '/admin',         ...deps, summaryRefreshService, orgsRepo });
     console.log('[BOOT] all route plugins registered');
 
     if (process.env.DEBUG_ROUTES === 'true') {

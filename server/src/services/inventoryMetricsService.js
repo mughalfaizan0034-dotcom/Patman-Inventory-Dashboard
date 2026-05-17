@@ -519,8 +519,16 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo, logger 
           'inventory_summary row set disagrees with live CTE',
         );
       } else {
+        // Sample-size hint: page items count + total. /admin/parity-report
+        // aggregates these so the operator can confirm sufficient sample
+        // size before flipping the read-path cutover switch.
         logger?.info?.(
-          { event: 'parity_sku_match', organization_id: organizationId, items: liveItems.length },
+          {
+            event: 'parity_sku_match',
+            organization_id: organizationId,
+            page_items:   liveItems.length,
+            total_skus:   liveTotal,
+          },
           'inventory_summary matches live CTE',
         );
       }

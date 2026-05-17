@@ -172,8 +172,16 @@ export function createLookupRepository({ bq, projectId, logger }) {
             'box_summary_by_* disagrees with live CTE',
           );
         } else {
+          // Sample-size hint: live_count is the number of (upc, part, box)
+          // tuples returned. /admin/parity-report sums across the window
+          // to confirm meaningful observation volume.
           logger?.info?.(
-            { event: 'parity_box_match', organization_id: organizationId, query, count: live.length },
+            {
+              event: 'parity_box_match',
+              organization_id: organizationId,
+              query,
+              live_count: live.length,
+            },
             'box_summary_by_* matches live CTE',
           );
         }

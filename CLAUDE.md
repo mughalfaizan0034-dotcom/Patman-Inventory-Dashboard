@@ -12,9 +12,92 @@ When you change [server/src/routes/health.js](server/src/routes/health.js)
 
 | Version tag | Shipped | Notes |
 |---|---|---|
+| `2026-05-17-phaseB-validation` | 2026-05-17 | Phase B validation tooling: `/admin/parity-report?hours=24`, `/admin/refresh-health?hours=24`, `/admin/refresh-all-orgs`, sample-size fields on parity_match log lines, Cloud Logging dep (@google-cloud/logging). Operator must grant `roles/logging.viewer` to the Cloud Run SA for the report endpoints to work. |
 | `2026-05-17-phaseB-prep` | 2026-05-17 | Phase B prep: MERGE-based refresh (CR1), Box Lookup reverted to live + parity log (CR2), refresh coalescing (CR3), per-table observability (HI2), SKU View parity log (HI3), admin /summary-status endpoint. |
 | `2026-05-17-phaseA-summaries` | 2026-05-17 | Phase A: materialized summary tables (dashboard_summary, inventory_summary, box_summary_by_upc, box_summary_by_part), summaryRefreshService with DELETE+INSERT writes, parity logging behind SUMMARY_PARITY_LOG=1, shared CTE builders, D1 fix (UPPER in SQL), My Profile tab removed. |
 | `memberships-v2-uploads-pipeline` | pre-2026-05-17 | Pre-audit baseline. Memberships v2, uploads pipeline, JWT-only sessions. |
+
+# Phase B parity-validation workflow
+
+This is the cutover gate. Do NOT flip read paths to the materialized
+summary tables until every step below comes back clean for 24h+.
+
+**Prerequisites**
+- BigQuery migration `20260517_002_materialized_summaries.sql` is run.
+- Cloud Run is deployed with build ≥ `2026-05-17-phaseB-validation`.
+- Cloud Run service account has `roles/logging.viewer` (REQUIRED for
+  `/admin/parity-report` and `/admin/refresh-health` to query Cloud
+  Logging). Grant via:
+  `gcloud projects add-iam-policy-binding patman-inventory --member=serviceAccount:<sa>@<project>.iam.gserviceaccount.com --role=roles/logging.viewer`
+
+**Step 1 — Populate every org's summaries**
+```
+POST /admin/refresh-all-orgs
+```
+Fire-and-forget. Returns the list of orgs scheduled. Wait ~30s for
+refreshes to complete (each is 2–5s per org and they run sequentially).
+Confirm with `GET /admin/summary-status?org=<orgId>` per org — every
+table should show non-null `last_refreshed_at`.
+
+**Step 2 — Enable parity logging**
+Set `SUMMARY_PARITY_LOG=1` on the Cloud Run revision and redeploy.
+Every dashboard hit, SKU View load, and Box Lookup search now emits
+`parity_*` log lines comparing live CTE output to the materialized
+table read.
+
+**Step 3 — Let real users use the app for ≥24 hours**
+The probe only fires on actual reads, so coverage depends on real
+operator activity. If specific orgs are quiet, ask their admin to open
+the dashboard to seed coverage.
+
+**Step 4 — Check the parity report**
+```
+GET /admin/parity-report?hours=24
+```
+Returns per-org match/diff/missing counts for each surface (dashboard,
+SKU View, Box Lookup), plus an explicit `ready_for_cutover` boolean
+per surface that's `true` only when ALL orgs show zero diffs and zero
+missing. Sample response:
+```json
+{
+  "window_hours": 24,
+  "ready_for_cutover": {
+    "dashboard": true,
+    "sku":       true,
+    "box":       true
+  },
+  "orgs": [
+    {
+      "organization_id": "...",
+      "dashboard": { "match": 412, "diff": 0, "missing_or_total_diff": 0 },
+      "sku":       { "match": 38,  "diff": 0, "missing_or_total_diff": 0 },
+      "box":       { "match": 7,   "diff": 0, "missing_or_total_diff": 0 }
+    }
+  ]
+}
+```
+
+If `ready_for_cutover.*` is `false` for any surface, inspect the
+`last_diff` payload on the failing orgs — it includes the exact
+fields and values that disagreed. Fix in `summaryRefreshService` or
+the shared CTE builders in `utils/skuPivots.js`, redeploy, restart
+the observation window.
+
+**Step 5 — Check refresh health**
+```
+GET /admin/refresh-health?hours=24
+```
+Per-org refresh count, p50/p95 table-rebuild durations, failure count,
+last-failure details. Any non-zero `failure_count` blocks cutover —
+investigate via the structured log entry referenced by the timestamp.
+
+**Step 6 — Cutover (Phase B proper)**
+Once steps 4 and 5 are clean: see "Phase B — Read-path cutover (PENDING)"
+in [docs/AUDIT_FOLLOWUP.md](docs/AUDIT_FOLLOWUP.md). Each surface
+(dashboard, SKU View, Box Lookup) can cut over independently. The
+60s KPI cache becomes optional after dashboard cutover.
+
+---
 
 # Current Architecture Snapshot (2026-05-17, post-audit)
 

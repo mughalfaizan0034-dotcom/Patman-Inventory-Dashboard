@@ -1,7 +1,7 @@
 // App version tag. Bumped on each shipped architecture milestone so the
 // Settings → System Status panel surfaces what's currently deployed.
 // Keep this in sync with the entry in CLAUDE.md → "Build version log".
-const APP_VERSION = '2026-05-17-phaseB-prep';
+const APP_VERSION = '2026-05-17-phaseB-validation';
 
 export async function healthRoutes(fastify) {
   fastify.get('/health', { logLevel: 'warn' }, async () => {

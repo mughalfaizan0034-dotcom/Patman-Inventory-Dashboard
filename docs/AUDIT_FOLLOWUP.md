@@ -7,6 +7,30 @@ implementation plan.
 
 Issued: 2026-05-17
 Source: full-stack audit (see chat transcript / FINDINGS report)
+Session-4 Phase B validation tooling that landed (2026-05-17, build
+`2026-05-17-phaseB-validation`):
+- **`GET /admin/parity-report?hours=24`** — queries Cloud Logging for all
+  `parity_*` events in the window, aggregates per (org, surface,
+  outcome), returns a structured report with an explicit
+  `ready_for_cutover.{dashboard,sku,box}` boolean per surface. This is
+  the cutover go/no-go gate.
+- **`GET /admin/refresh-health?hours=24`** — aggregates
+  `summary_refresh_table` + `summary_refresh_complete` events: per-org
+  refresh count, p50/p95 durations, failure count, last failure detail.
+- **`POST /admin/refresh-all-orgs`** — eliminates the "this org never
+  had a mutation since the migration" class of parity_*_missing events
+  by force-firing a refresh for every active org. Uses the same
+  coalescing protection as ordinary refresh triggers.
+- **`@google-cloud/logging` dependency added** to `server/package.json`.
+  Operator must grant `roles/logging.viewer` to the Cloud Run service
+  account or the two report endpoints return 503 with a clear message.
+- **Sample-size fields on `parity_match` logs** so 24h aggregates have
+  total volume in addition to the boolean match/diff signal. Lets
+  operators verify they're judging cutover readiness off sufficient
+  observation, not 3 dashboard hits.
+- See "Phase B parity-validation workflow" in CLAUDE.md for the step-by-step
+  go-live procedure.
+
 Session-3 Phase B prep work that landed (2026-05-17, build `2026-05-17-phaseB-prep`):
 - **CR1 (HIGH)** — `summaryRefreshService` rebuilds rewritten as single
   `MERGE` statements per table with `WHEN NOT MATCHED BY SOURCE AND
