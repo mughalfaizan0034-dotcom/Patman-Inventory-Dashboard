@@ -5,8 +5,13 @@
 
 // ── Runtime config ────────────────────────────────────────────────────────────
 // Using var (not const) so these live on window and are visible in DevTools.
-// DEPLOYMENT: replace with your Cloud Run service URL.
-var CLOUD_RUN_URL = 'https://patman-inventory-api-znfextdp4q-uc.a.run.app';
+// CANONICAL Cloud Run hostname for the patman-inventory-api service. There is
+// exactly ONE production API base URL — do NOT duplicate this constant or
+// hardcode the URL elsewhere in the frontend (api.js + every module read
+// from CONFIG.CLOUD_RUN_URL). The legacy `*-znfextdp4q-uc.a.run.app`
+// hostname is decommissioned; all traffic must flow through the canonical
+// project-number host below.
+var CLOUD_RUN_URL = 'https://patman-inventory-api-471065748321.us-central1.run.app';
 
 var CONFIG = {
   CLOUD_RUN_URL,
