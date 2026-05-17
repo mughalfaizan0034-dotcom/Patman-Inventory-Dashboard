@@ -1537,59 +1537,86 @@ const Settings = (() => {
   }
 
   /* ── Admin operations panel (Phase B parity-validation tooling) ────
-     Visible only when Auth.hasRole('admin'). Buttons consume the same
-     authenticated API client used everywhere else — no separate auth
-     path, no token plumbing. Each operation has its own result panel
-     beneath the button so multiple reports can stay on screen at once. */
+     Visible only when Auth.hasRole('admin'). Two-row responsive layout:
+       Row 1 — three compact action cards (small, button-only).
+       Row 2 — two wider report cards (hold tables; result area scrolls).
+     Buttons consume the same authenticated API client used everywhere
+     else — no separate auth path, no token plumbing. Each operation
+     has its own result panel beneath the button so multiple reports
+     can stay on screen at once. */
   function _adminOpsPanelHtml() {
-    const card = (id, title, sub, btnLabel, btnStyle = 'btn-secondary') => `
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+    // Compact action card — title, one-line sub, button, slim result.
+    const actionCard = (id, title, sub, btnLabel, btnStyle = 'btn-secondary') => `
+      <div class="admin-op-card">
         <div>
-          <div style="font-size:13.5px;font-weight:700;color:var(--txt-1)">${Utils.escapeHtml(title)}</div>
-          <div style="font-size:12px;color:var(--txt-4);margin-top:2px;line-height:1.45">${sub}</div>
+          <div class="admin-op-title">${Utils.escapeHtml(title)}</div>
+          <div class="admin-op-sub">${sub}</div>
         </div>
         <button class="btn ${btnStyle} btn-sm" id="${id}" style="align-self:flex-start">
           ${Utils.escapeHtml(btnLabel)}
         </button>
-        <div id="${id}-result" class="admin-op-result" style="display:none;font-size:12px"></div>
+        <div id="${id}-result" class="admin-op-result admin-op-result--slim"></div>
       </div>`;
 
-    return `
-      <div style="margin-top:22px;padding-top:18px;border-top:1px dashed var(--border)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-          <span style="font-size:10px;font-weight:700;background:var(--warning);color:#fff;padding:2px 7px;border-radius:999px;letter-spacing:.05em">ADMIN</span>
-          <div style="font-size:14px;font-weight:700;color:var(--txt-1)">Operational Diagnostics</div>
+    // Wider report card — same chrome, but result area can grow taller
+    // and scrolls internally so the page itself doesn't balloon.
+    const reportCard = (id, title, sub, btnLabel) => `
+      <div class="admin-op-card admin-op-card--report">
+        <div>
+          <div class="admin-op-title">${Utils.escapeHtml(title)}</div>
+          <div class="admin-op-sub">${sub}</div>
         </div>
-        <div style="font-size:12px;color:var(--txt-4);margin-bottom:14px;line-height:1.5">
+        <button class="btn btn-secondary btn-sm" id="${id}" style="align-self:flex-start">
+          ${Utils.escapeHtml(btnLabel)}
+        </button>
+        <div id="${id}-result" class="admin-op-result admin-op-result--report"></div>
+      </div>`;
+
+    // Responsive grid driven by CSS classes (defined in
+    // _adminOpsPanelStyleHtml below — injected inline so this module stays
+    // self-contained and survives an org switch without depending on a
+    // separate stylesheet bump).
+    return `
+      ${_adminOpsPanelStyleHtml()}
+      <div class="admin-ops-panel">
+        <div class="admin-ops-header">
+          <span class="admin-ops-chip">ADMIN</span>
+          <div class="admin-ops-title">Operational Diagnostics</div>
+        </div>
+        <div class="admin-ops-blurb">
           Phase B parity-validation tooling. Use these to populate summary tables, observe
           parity, and confirm readiness for read-path cutover. See <code>docs/AUDIT_FOLLOWUP.md</code>.
         </div>
-        <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
-          ${card(
+
+        <div class="admin-ops-row admin-ops-row--actions">
+          ${actionCard(
             'admin-op-refresh-all',
             'Refresh All Summary Tables',
             'Triggers <code>summaryRefreshService.refresh()</code> for every active org. Eliminates the "never mutated since migration" parity-missing class.',
             'Refresh All Orgs', 'btn-primary',
           )}
-          ${card(
+          ${actionCard(
             'admin-op-refresh-org',
             'Refresh Current Organization',
             'Force-rebuilds the four summary tables for the org you\'re signed into.',
             'Refresh This Org',
           )}
-          ${card(
+          ${actionCard(
             'admin-op-summary-status',
             'Summary Status (this org)',
             'Per-table row count + most-recent <code>refreshed_at</code> for the active org.',
             'View Status',
           )}
-          ${card(
+        </div>
+
+        <div class="admin-ops-row admin-ops-row--reports">
+          ${reportCard(
             'admin-op-refresh-health',
             'Refresh Health (24h)',
             'Per-org refresh count, p50/p95 durations, failure count. Reads Cloud Logging.',
             'View Health',
           )}
-          ${card(
+          ${reportCard(
             'admin-op-parity-report',
             'Parity Report (24h)',
             'The <strong>cutover gate</strong>. Per-org dashboard/SKU/box match-vs-diff counts and <code>ready_for_cutover</code> booleans.',
@@ -1597,6 +1624,60 @@ const Settings = (() => {
           )}
         </div>
       </div>
+    `;
+  }
+
+  // Self-contained styles for the admin-ops panel. Injected as a <style>
+  // tag inside the panel HTML so it survives org-switch / re-renders
+  // without needing a CSS file version bump. Idempotent — duplicate
+  // <style> blocks with the same id collapse to the most recent.
+  function _adminOpsPanelStyleHtml() {
+    return `
+      <style id="admin-ops-styles">
+        .admin-ops-panel { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--border); }
+        .admin-ops-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .admin-ops-chip { font-size: 10px; font-weight: 700; background: var(--warning); color: #fff; padding: 2px 7px; border-radius: 999px; letter-spacing: .05em; }
+        .admin-ops-title { font-size: 14px; font-weight: 700; color: var(--txt-1); }
+        .admin-ops-blurb { font-size: 12px; color: var(--txt-4); margin-bottom: 14px; line-height: 1.5; }
+
+        .admin-ops-row { display: grid; gap: 12px; margin-bottom: 12px; }
+        .admin-ops-row--actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .admin-ops-row--reports { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+        @media (max-width: 1024px) {
+          .admin-ops-row--actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .admin-ops-row--reports { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 720px) {
+          .admin-ops-row--actions,
+          .admin-ops-row--reports { grid-template-columns: 1fr; }
+        }
+
+        .admin-op-card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--r-sm);
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, .03);
+        }
+        .admin-op-card--report { min-height: 180px; }
+        .admin-op-title { font-size: 13px; font-weight: 700; color: var(--txt-1); }
+        .admin-op-sub   { font-size: 11.5px; color: var(--txt-4); margin-top: 2px; line-height: 1.4; }
+
+        .admin-op-result { display: none; font-size: 12px; line-height: 1.5; }
+        .admin-op-result--slim   { /* short messages — no scroll constraint */ }
+        .admin-op-result--report { max-height: 380px; overflow-y: auto; }
+
+        /* Tables inside results — uniform compact rows */
+        .admin-op-result table { width: 100%; border-collapse: collapse; }
+        .admin-op-result thead tr { background: var(--surface-3); font-size: 11px; text-transform: uppercase; color: var(--txt-3); }
+        .admin-op-result th { padding: 6px 8px; text-align: left; font-weight: 600; }
+        .admin-op-result td { padding: 5px 8px; border-top: 1px solid var(--border); }
+        .admin-op-result tbody tr:hover { background: var(--surface-2); }
+      </style>
     `;
   }
 
