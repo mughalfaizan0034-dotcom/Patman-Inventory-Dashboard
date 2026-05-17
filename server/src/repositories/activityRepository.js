@@ -2,8 +2,7 @@ import { randomUUID } from 'crypto';
 import { TABLES } from '../config/tables.js';
 
 export function createActivityRepository({ bq, projectId }) {
-  const table   = `\`${projectId}.${TABLES.ACTIVITY_LOG}\``;
-  const dataset = bq.dataset('patman_inventory');
+  const table = `\`${projectId}.${TABLES.ACTIVITY_LOG}\``;
 
   const ICONS = {
     upload_inventory:  '📦',
@@ -14,18 +13,38 @@ export function createActivityRepository({ bq, projectId }) {
     edit_order:        '✏️',
   };
 
+  // Append a row to activity_log. Switched from streaming-insert to
+  // DML INSERT in M4 (2026-05-18) because:
+  //   1. Streaming inserts lock rows from UPDATE/DELETE for ~90 min
+  //      via BQ's streaming buffer. Even though we never DELETE
+  //      activity_log rows (audit retention), streaming has higher
+  //      per-row cost and looser consistency.
+  //   2. DML INSERT places the row in regular storage immediately —
+  //      visible to next-millisecond SELECTs and immutable from
+  //      buffer-related quirks.
+  //
+  // Failures stay non-fatal: an audit-log write must never block the
+  // originating user action.
   async function log({ organizationId, userId, actionType, entityType, description }) {
-    const row = {
-      activity_id:     randomUUID(),
-      organization_id: organizationId,
-      user_id:         userId || null,
-      action_type:     actionType,
-      entity_type:     entityType,
-      description,
-      created_at:      new Date().toISOString(),
-    };
+    const query = `
+      INSERT INTO ${table}
+        (activity_id, organization_id, user_id, action_type, entity_type, description, created_at)
+      VALUES
+        (@activity_id, @organization_id, @user_id, @action_type, @entity_type, @description, CURRENT_TIMESTAMP())
+    `;
     try {
-      await dataset.table('activity_log').insert([row]);
+      await bq.query({
+        query,
+        params: {
+          activity_id:     randomUUID(),
+          organization_id: organizationId,
+          user_id:         userId || null,
+          action_type:     actionType,
+          entity_type:     entityType,
+          description,
+        },
+        types: { user_id: 'STRING' },
+      });
     } catch { /* non-fatal — activity log failures must not break main operations */ }
   }
 
