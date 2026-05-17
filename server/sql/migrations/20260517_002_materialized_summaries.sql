@@ -132,10 +132,17 @@ CREATE TABLE IF NOT EXISTS `patman-inventory.patman_inventory.box_summary_by_par
 CLUSTER BY organization_id, part_norm;
 
 
--- Verification:
-SELECT table_name, clustering_fields
-FROM `patman-inventory.patman_inventory.INFORMATION_SCHEMA.TABLES`
+-- Verification: list the clustered columns for each summary table.
+-- BigQuery exposes clustering metadata via INFORMATION_SCHEMA.COLUMNS
+-- (not TABLES). Each clustered column has clustering_ordinal_position
+-- set to its 1-based slot; non-clustered columns are NULL there.
+SELECT
+  table_name,
+  ARRAY_AGG(column_name ORDER BY clustering_ordinal_position) AS cluster_keys
+FROM `patman-inventory.patman_inventory.INFORMATION_SCHEMA.COLUMNS`
 WHERE table_name IN ('dashboard_summary', 'inventory_summary', 'box_summary_by_upc', 'box_summary_by_part')
+  AND clustering_ordinal_position IS NOT NULL
+GROUP BY table_name
 ORDER BY table_name;
 
 

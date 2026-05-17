@@ -93,9 +93,13 @@ doesn't actually invalidate refresh tokens on the server.
   user action and on org switch.
 
 **Materialized summary tables (Phase A LANDED · Phase B PENDING)**:
-- `dashboard_summary`, `inventory_summary`, `box_summary` BQ tables exist
-  (see `server/sql/migrations/20260517_002_materialized_summaries.sql` —
-  MUST be run by operator before deploy).
+- `dashboard_summary`, `inventory_summary`, `box_summary_by_upc`,
+  `box_summary_by_part` BQ tables exist (see
+  `server/sql/migrations/20260517_002_materialized_summaries.sql` — MUST
+  be run by operator before deploy). Box Lookup is split into two
+  purpose-clustered tables so UPC and part-number searches both get
+  ~10 KB cluster-pruned scans (Option D, see AUDIT_FOLLOWUP.md for the
+  full analysis).
 - `summaryRefreshService.refresh(orgId)` is the ONLY writer to those
   tables. Wired into every mutating route (uploads, inventory CRUD,
   orders CRUD, org sku_structure update). Refresh failures are

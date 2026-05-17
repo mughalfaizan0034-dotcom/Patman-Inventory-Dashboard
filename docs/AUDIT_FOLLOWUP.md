@@ -7,6 +7,34 @@ implementation plan.
 
 Issued: 2026-05-17
 Source: full-stack audit (see chat transcript / FINDINGS report)
+Session-2 architecture work that landed (2026-05-17, later in the day):
+- **Drift prevention** — extracted shared CTE builders to
+  [server/src/utils/skuPivots.js](../server/src/utils/skuPivots.js).
+  `ordersAggCTE` / `invAggCTE` / `perSkuCTE` are now defined ONCE and
+  imported by `inventoryMetricsService`, `summaryRefreshService`,
+  `lookupRepository`, `inventoryRepository.findAlternativeBoxes`. The
+  duplicated CTE bodies in those services are gone — live and
+  materialized paths cannot drift because they share source text.
+- **D1 fix (Option A)** — `isUndefinedSql` now wraps the SKU column in
+  `UPPER(IFNULL(...))` before regex match
+  ([server/src/utils/inventoryPatterns.js](../server/src/utils/inventoryPatterns.js)).
+  Default character classes are already uppercase-only
+  (`[A-Z0-9]+`). Frontend `normalizeSku` already uppercases when
+  `case_insensitive: true` (default). All three classifier paths
+  (modal validator, SQL `isUndefinedSql`, summary refresh) now produce
+  identical results.
+- **Box Lookup Option D** — `box_summary` split into
+  `box_summary_by_upc` (clustered org + upc_norm) and
+  `box_summary_by_part` (clustered org + part_norm). Each table has a
+  normalized clustered column populated at refresh time via
+  `LOWER(TRIM(...))`. `summaryRefreshService` writes BOTH on every
+  refresh. `lookupRepository.search` routes by query shape
+  (numeric 8-14 digits → by_upc; else → by_part) with cross-table
+  fallback on empty result. See "Box Lookup architecture decision"
+  section below for the full analysis.
+- **My Profile tab removed** from Settings (markup + handler + tab-init
+  function deleted; no other surface depended on it).
+
 Session-1 fixes that already landed (do NOT re-do):
 - M1: `/auth/switch-org` `is_active` check
 - M2: frontend `switchOrg` writes new refresh token
@@ -608,6 +636,73 @@ Pre-flight safety check:
   could nuke production data. Must ship with a test plan executed
   against a staging environment first.
 - Estimated effort: 0.5–1 day of focused work.
+
+---
+
+---
+
+## Box Lookup architecture decision (LANDED 2026-05-17)
+
+### Problem
+`WHERE organization_id = @x AND (LOWER(TRIM(upc)) = LOWER(TRIM(@q)) OR LOWER(TRIM(part_number)) = LOWER(TRIM(@q)))` had two issues:
+1. **`LOWER(TRIM())` defeated clustering** — even with `CLUSTER BY org,
+   upc`, the wrapped expression cannot be mapped back to block-level
+   min/max stats, so BigQuery reverted to full org-slice scan.
+2. **OR over two columns** — even with literal equality, only ONE of
+   the two columns could be clustered. Whichever path wasn't clustered
+   would scan the org's full slice.
+
+### Options evaluated
+- **A. Keep `CLUSTER BY org, upc`** — UPC search fast, part search slow.
+- **B. `CLUSTER BY org, part_number`** — mirror of A; just shifts the
+  problem to UPC.
+- **C. `CLUSTER BY org, upc, part_number`** — BigQuery clustering is
+  LEFT-PREFIX. The third key only fires when both preceding keys are
+  bound. For an OR predicate, it never fires. Wasted cluster slot.
+- **D. Split tables: `box_summary_by_upc` + `box_summary_by_part`** —
+  two narrow tables, each clustered for ONE access pattern. Both
+  searches hit ~10 KB scans regardless of org size. ← CHOSEN
+- **E. Two queries against one table** — UPC branch gets clustering;
+  part branch still full-scans. 2× latency for half the benefit.
+
+### Why D won
+- **Symmetric latency**: UPC and part lookups both sub-50ms regardless
+  of which is more common per-org. Operationally important — you can't
+  predict which identifier the operator has in hand.
+- **2× storage cost is trivial** at box-summary grain (small per org).
+- **2× refresh write cost** is on the fire-and-forget path that already
+  doesn't block the originating mutation. Wall-clock per org ~3s → ~3.5s.
+- **Routing complexity** is one regex
+  (`/^\d{8,14}$/`) and a fallback rule, codified once in
+  `lookupRepository`.
+- **Schema migrations** affect two tables instead of one — acceptable
+  given the perf win.
+
+### What did NOT influence the choice
+- **Future autocomplete/fuzzy search** — BigQuery clustering doesn't
+  help prefix or trigram matching anyway. Those features will need a
+  separate architectural call (BQ `SEARCH()` indexes, Algolia, or
+  equivalent). Not letting it bias the clustering decision now.
+- **"Millions of rows"** — even at 100k box-rows per org, an
+  unclustered org-slice scan is only ~10 MB. The latency win (150ms →
+  50ms) matters more than the $ savings.
+
+### Implementation references
+- DDL: [server/sql/migrations/20260517_002_materialized_summaries.sql](../server/sql/migrations/20260517_002_materialized_summaries.sql)
+- Refresh: [server/src/services/summaryRefreshService.js](../server/src/services/summaryRefreshService.js) `_rebuildBoxSummary`
+- Read: [server/src/repositories/lookupRepository.js](../server/src/repositories/lookupRepository.js)
+
+### Upgrade note for ops
+If an earlier revision of the materialized summaries migration was run
+and created a single `box_summary` table, drop it manually after
+deploying the new code:
+
+```sql
+DROP TABLE IF EXISTS `patman-inventory.patman_inventory.box_summary`;
+```
+
+`summaryRefreshService` rebuilds both new tables from raw on the next
+mutating operation per org. No data loss.
 
 ---
 

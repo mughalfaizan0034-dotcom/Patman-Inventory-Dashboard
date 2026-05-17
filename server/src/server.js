@@ -136,7 +136,7 @@ export async function buildApp() {
     const dashboardRepo    = createDashboardRepository(deps);
     const uploadsRepo      = createUploadsRepository(deps);
     const activityRepo     = createActivityRepository(deps);
-    const lookupRepo       = createLookupRepository(deps);
+    const lookupRepo       = createLookupRepository({ ...deps, logger: fastify.log });
 
     // Services
     const usernameService  = createUsernameService({ usersRepo });
