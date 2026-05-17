@@ -1,15 +1,11 @@
+// Inventory service — operations that touch raw inventory rows.
+//
+// The canonical inventory READ path (SKU View) is handled by
+// inventoryMetricsService.getSkuSummary, which reuses the same pivot CTEs
+// that drive the dashboard. This service owns the mutating operations
+// (PATCH / DELETE), the drilldown raw-rows query, and the same-part-box
+// alternatives lookup for the order-row reassignment popover.
 export function createInventoryService({ inventoryRepo }) {
-  async function list(organizationId, filters) {
-    const { items, total } = await inventoryRepo.findAll({ organizationId, ...filters });
-    return {
-      items,
-      total,
-      page:     filters.page,
-      pageSize: filters.pageSize,
-      pages:    Math.ceil(total / filters.pageSize),
-    };
-  }
-
   // rowUids is the canonical tracker — SKU is no longer the row key.
   async function deleteRows(organizationId, rowUids) {
     const deleted = await inventoryRepo.deleteByRowUids(organizationId, rowUids);
@@ -30,15 +26,11 @@ export function createInventoryService({ inventoryRepo }) {
     };
   }
 
-  async function exportAll(organizationId, filters) {
-    return inventoryRepo.exportAll({ organizationId, ...filters });
-  }
-
   // Raw upload rows for a single SKU (drilldown under the SKU summary).
   async function listRawBySku(organizationId, sku) {
     const items = await inventoryRepo.findRawRowsBySku(organizationId, sku);
     return { items, total: items.length };
   }
 
-  return { list, exportAll, deleteRows, updateRow, findAlternatives, listRawBySku };
+  return { deleteRows, updateRow, findAlternatives, listRawBySku };
 }

@@ -289,16 +289,12 @@ const API = (() => {
     /* Lookup */
     async lookup(query) { return _crGet('/lookup', { query }); },
 
-    /* Inventory */
-    async searchBox(query)                                    { return _crGet('/inventory', { search: query, pageSize: 10, page: 1 }); },
-    async getInventoryList(page=1, pageSize=CONFIG.PAGE_SIZE, search='', options={}) { return _crGet('/inventory', { page, pageSize, search, ...options }); },
-    // SKU View — canonical inventory page, one row per SKU. Backed by the
-    // same metrics engine that powers dashboard KPIs.
+    /* Inventory — SKU View is the canonical inventory page, one row per SKU.
+       Backed by the same metrics engine that powers dashboard KPIs. */
     async getSkuSummary(page=1, pageSize=CONFIG.PAGE_SIZE, search='', options={}) { return _crGet('/inventory/sku-summary', { page, pageSize, search, ...options }); },
     async getRawRowsBySku(sku)                                                    { return _crGet('/inventory/by-sku', { sku }); },
     async exportSkuSummary(filters={})                                            { return _crGetBlob('/inventory/sku-summary/export', filters); },
     async exportInventoryListRaw(filters={})                                      { return _crGetBlob('/inventory/sku-summary/export-raw', filters); },
-    async exportInventory(filters={}) { return _crGetBlob('/inventory/export', filters); },
 
     /* Orders */
     async getOrders(page=1, pageSize=CONFIG.PAGE_SIZE, filters={}) { return _crGet('/orders', { page, pageSize, ...filters }); },

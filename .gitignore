@@ -7,3 +7,5 @@ Thumbs.db
 dist/
 build/
 .clasp-creds.json
+# Atomic-write temp files (e.g. css/layout.css.tmp.34208.68902b3e44b2)
+*.tmp.*
