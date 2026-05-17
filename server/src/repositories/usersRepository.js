@@ -111,5 +111,21 @@ export function createUsersRepository({ bq, projectId }) {
     await bq.query({ query, params: { passwordHash, userId } });
   }
 
-  return { findByUsernameGlobal, findById, findAll, findAllWithMemberships, insert, update, updatePasswordHash };
+  // ─────────────────────────────────────────────────────────────────────
+  // Hard-delete (2026-05-18). Irreversible row removal — the row is GONE,
+  // not soft-flagged. Caller MUST verify the user is_active=false BEFORE
+  // calling this; the two-step gate (deactivate → confirm → delete) is
+  // enforced at the route layer so a single misclick can't destroy data.
+  //
+  // Membership rows and refresh-token rows for the same user are deleted
+  // by their own repositories — this method only handles the users row.
+  // ─────────────────────────────────────────────────────────────────────
+  async function hardDeleteUser(userId) {
+    if (!userId) return 0;
+    const query = `DELETE FROM ${table} WHERE user_id = @userId`;
+    const [job] = await bq.query({ query, params: { userId } });
+    return job?.numDmlAffectedRows ? Number(job.numDmlAffectedRows) : 0;
+  }
+
+  return { findByUsernameGlobal, findById, findAll, findAllWithMemberships, insert, update, updatePasswordHash, hardDeleteUser };
 }

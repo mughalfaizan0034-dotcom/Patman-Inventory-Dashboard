@@ -104,5 +104,64 @@ export function createOrganizationsRepository({ bq, projectId }) {
     _invalidate(organizationId);
   }
 
-  return { findBySlug, findById, findAll, insert, update, getSkuRegex };
+  // ─────────────────────────────────────────────────────────────────────
+  // Hard-delete (2026-05-18). The organization row plus everything it
+  // owns — memberships, raw inventory + orders, all summary tables, and
+  // upload audit rows — is DELETED. Irreversible. Caller (route) gates
+  // this on is_active=false so deactivate-first is enforced.
+  //
+  // Each delete is its own DML statement scoped by organization_id.
+  // BigQuery's DML quota per table per day (1500) is well above what
+  // any reasonable hard-delete operation can hit — even a worst-case
+  // single org with millions of rows is a single DELETE statement.
+  // ─────────────────────────────────────────────────────────────────────
+  async function deleteAllOrgData(organizationId) {
+    if (!organizationId) return { tables_cleared: [] };
+    const cleared = [];
+
+    // Tables that carry organization_id as a direct column. We DELETE
+    // from each one before removing the organizations row last so a
+    // partial failure leaves the org marked inactive but with some
+    // residue, rather than orphaned data with no parent.
+    const orgScopedTables = [
+      TABLES.INVENTORY,
+      TABLES.ORDERS,
+      TABLES.INVENTORY_UPLOADS,
+      TABLES.ORDER_UPLOADS,
+      TABLES.DASHBOARD_SUMMARY,
+      TABLES.INVENTORY_SUMMARY,
+      TABLES.BOX_SUMMARY_BY_UPC,
+      TABLES.BOX_SUMMARY_BY_PART,
+    ];
+
+    for (const t of orgScopedTables) {
+      try {
+        await bq.query({
+          query:  `DELETE FROM \`${projectId}.${t}\` WHERE organization_id = @organizationId`,
+          params: { organizationId },
+        });
+        cleared.push(t);
+      } catch (err) {
+        // Tolerate missing tables (e.g. a summary table on an
+        // installation that hasn't run the materialized-summaries
+        // migration). Other errors propagate so the route can surface
+        // them to the operator.
+        const msg = String(err?.message ?? '');
+        if (/Not found: Table|does not have a table/i.test(msg)) continue;
+        throw err;
+      }
+    }
+
+    // Finally, delete the organizations row itself.
+    await bq.query({
+      query:  `DELETE FROM ${table} WHERE organization_id = @organizationId`,
+      params: { organizationId },
+    });
+    cleared.push(TABLES.ORGANIZATIONS);
+
+    _invalidate(organizationId);
+    return { tables_cleared: cleared };
+  }
+
+  return { findBySlug, findById, findAll, insert, update, getSkuRegex, deleteAllOrgData };
 }

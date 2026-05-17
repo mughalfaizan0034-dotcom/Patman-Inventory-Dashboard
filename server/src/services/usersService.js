@@ -201,5 +201,36 @@ export function createUsersService({ usersRepo, membershipsRepo, usernameService
     await usersRepo.update(userId, { is_active: false });
   }
 
-  return { list, findByUsername, create, checkUsername, updateGlobalUser, deactivateUser };
+  // Hard-delete the user — irreversible row removal from users +
+  // every membership + every refresh token. Activity log entries are
+  // intentionally LEFT in place so admin audit history isn't lost.
+  //
+  // Two-step gate: the user MUST already be is_active=false before
+  // permanent delete is allowed. This prevents a single misclick from
+  // destroying an active account. The gate is also enforced at the
+  // route layer for defense in depth.
+  async function permanentDeleteUser(userId, requestingUserId) {
+    if (userId === requestingUserId) throw new AppError(400, 'Cannot permanently delete your own account');
+    const user = await usersRepo.findById(userId);
+    if (!user) throw new AppError(404, 'User not found');
+    if (user.is_active !== false) {
+      throw new AppError(409, 'User must be removed (deactivated) first. Open the Edit dialog, click Remove, then return to delete permanently.');
+    }
+    // Cascade: memberships first (FK-like dependency), then refresh
+    // tokens, then the user row last.
+    const membershipsDeleted = await membershipsRepo.deleteAllByUserId(userId);
+    const tokensDeleted      = refreshTokensRepo?.deleteAllByUserId
+      ? await refreshTokensRepo.deleteAllByUserId(userId)
+      : 0;
+    const userDeleted        = await usersRepo.hardDeleteUser(userId);
+    return {
+      user_deleted:        userDeleted,
+      memberships_deleted: membershipsDeleted,
+      tokens_deleted:      tokensDeleted,
+      username:            user.username,
+      display_name:        user.display_name,
+    };
+  }
+
+  return { list, findByUsername, create, checkUsername, updateGlobalUser, deactivateUser, permanentDeleteUser };
 }

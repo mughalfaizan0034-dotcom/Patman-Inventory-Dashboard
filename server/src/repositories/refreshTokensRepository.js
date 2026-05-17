@@ -187,6 +187,26 @@ export function createRefreshTokensRepository({ bq, projectId, logger }) {
     }
   }
 
+  // Hard-delete every refresh token for a user. Called by the user
+  // permanent-delete flow — leaving "revoked" rows behind would
+  // accumulate forever after a user is gone. Best-effort: tolerates
+  // missing-table mode (legacy auth) by short-circuiting.
+  async function deleteAllByUserId(userId) {
+    if (!userId) return 0;
+    if (_missingTableLatched) return 0;
+    const query = `DELETE FROM ${refreshTokensTable} WHERE user_id = @userId`;
+    try {
+      const [job] = await bq.query({ query, params: { userId } });
+      return job?.numDmlAffectedRows ? Number(job.numDmlAffectedRows) : 0;
+    } catch (err) {
+      if (_isMissingTable(err)) {
+        _markMissing('deleteAllByUserId');
+        return 0;
+      }
+      return 0;
+    }
+  }
+
   // Stamp last_used_at after a successful refresh. Used by future
   // "Active Sessions" UI; not load-bearing for security.
   async function markUsed(jti) {
@@ -200,7 +220,7 @@ export function createRefreshTokensRepository({ bq, projectId, logger }) {
     catch { /* non-fatal */ }
   }
 
-  return { insert, getActive, revoke, revokeFamily, revokeAllByUserId, markUsed, isLegacyMode };
+  return { insert, getActive, revoke, revokeFamily, revokeAllByUserId, deleteAllByUserId, markUsed, isLegacyMode };
 }
 
 function _truncate(s, n) {

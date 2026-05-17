@@ -109,9 +109,29 @@ export function createMembershipsRepository({ bq, projectId }) {
     await bq.query({ query, params: { ...updates, membershipId } });
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Hard-delete cascades (2026-05-18). Called by the user/org permanent-
+  // delete flow after the two-step gate (entity must already be
+  // is_active=false). Irreversible.
+  // ─────────────────────────────────────────────────────────────────────
+  async function deleteAllByUserId(userId) {
+    if (!userId) return 0;
+    const query = `DELETE FROM ${table} WHERE user_id = @userId`;
+    const [job] = await bq.query({ query, params: { userId } });
+    return job?.numDmlAffectedRows ? Number(job.numDmlAffectedRows) : 0;
+  }
+
+  async function deleteAllByOrgId(organizationId) {
+    if (!organizationId) return 0;
+    const query = `DELETE FROM ${table} WHERE organization_id = @organizationId`;
+    const [job] = await bq.query({ query, params: { organizationId } });
+    return job?.numDmlAffectedRows ? Number(job.numDmlAffectedRows) : 0;
+  }
+
   return {
     getUserMemberships, findAllByUser, findAllByOrg,
     getMembershipById, getMembership,
     getMembersByOrg, createMembership, updateMembership,
+    deleteAllByUserId, deleteAllByOrgId,
   };
 }
