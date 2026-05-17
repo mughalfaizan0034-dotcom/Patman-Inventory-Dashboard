@@ -6,28 +6,84 @@
 const Auth = (() => {
 
   const REFRESH_KEY     = 'patman_refresh_token';
+  const REMEMBER_KEY    = 'patman_remembered';
   const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   const _channel        = typeof BroadcastChannel !== 'undefined'
     ? new BroadcastChannel('patman_auth') : null;
 
   let _idleTimer = null;
 
-  /* ── Session storage ──────────────────────────────────────── */
-  function saveSession(token, user, organization, refreshToken, memberships) {
-    sessionStorage.setItem(CONFIG.SESSION_KEY,     token);
-    sessionStorage.setItem(CONFIG.USER_KEY,        JSON.stringify(user));
-    sessionStorage.setItem(CONFIG.ORG_KEY,         JSON.stringify(organization));
-    if (refreshToken) sessionStorage.setItem(REFRESH_KEY, refreshToken);
-    if (memberships)  sessionStorage.setItem(CONFIG.MEMBERSHIPS_KEY, JSON.stringify(memberships));
-    console.log('[AUTH] saveSession — org:', organization?.organization_id, 'memberships:', Array.isArray(memberships) ? memberships.length : memberships, 'hasRefresh:', !!refreshToken);
+  /* ── Session storage ──────────────────────────────────────────
+     Phase A "Remember this device" (2026-05-18):
+
+       • Non-remembered (default): everything in sessionStorage,
+         per-tab, dies on tab close. Matches pre-2026-05-18 behavior.
+
+       • Remembered: refresh token + user identity + org + memberships
+         in localStorage (survives browser restart). Access token
+         still in sessionStorage — it's short-lived and per-tab is the
+         right scope; on a fresh tab we silently refresh from the
+         localStorage refresh token to mint a new access token.
+
+     The "remembered" flag itself lives in localStorage so any tab can
+     answer "is this a remembered device?" without parsing the JWT.
+  */
+  function _store(remembered) {
+    return remembered ? localStorage : sessionStorage;
+  }
+
+  function isRemembered() {
+    return localStorage.getItem(REMEMBER_KEY) === '1';
+  }
+
+  function saveSession(token, user, organization, refreshToken, memberships, remembered) {
+    // When `remembered` is omitted (e.g. refresh in /auth.js below
+    // re-saving), preserve the existing preference.
+    const effectiveRemembered = (typeof remembered === 'boolean')
+      ? remembered
+      : isRemembered();
+    const store = _store(effectiveRemembered);
+
+    // Access token always lives in sessionStorage (per-tab, short-lived).
+    sessionStorage.setItem(CONFIG.SESSION_KEY, token);
+
+    // Identity + refresh token go to the chosen store.
+    store.setItem(CONFIG.USER_KEY,        JSON.stringify(user));
+    store.setItem(CONFIG.ORG_KEY,         JSON.stringify(organization));
+    if (refreshToken) store.setItem(REFRESH_KEY, refreshToken);
+    if (memberships)  store.setItem(CONFIG.MEMBERSHIPS_KEY, JSON.stringify(memberships));
+
+    // Persist the "remembered" preference itself. localStorage so a
+    // fresh tab can read it before any auth state has been restored.
+    if (effectiveRemembered) localStorage.setItem(REMEMBER_KEY, '1');
+    else                     localStorage.removeItem(REMEMBER_KEY);
+
+    // If we're flipping from non-remembered → remembered, also nuke
+    // any stale sessionStorage copy of the same keys so reads from
+    // _readEither() always get the canonical localStorage value.
+    if (effectiveRemembered) {
+      sessionStorage.removeItem(CONFIG.USER_KEY);
+      sessionStorage.removeItem(CONFIG.ORG_KEY);
+      sessionStorage.removeItem(CONFIG.MEMBERSHIPS_KEY);
+      sessionStorage.removeItem(REFRESH_KEY);
+    }
+
+    console.log('[AUTH] saveSession — org:', organization?.organization_id, 'memberships:', Array.isArray(memberships) ? memberships.length : memberships, 'hasRefresh:', !!refreshToken, 'remembered:', effectiveRemembered);
   }
 
   function clearSession() {
-    sessionStorage.removeItem(CONFIG.SESSION_KEY);
-    sessionStorage.removeItem(CONFIG.USER_KEY);
-    sessionStorage.removeItem(CONFIG.ORG_KEY);
-    sessionStorage.removeItem(CONFIG.MEMBERSHIPS_KEY);
-    sessionStorage.removeItem(REFRESH_KEY);
+    for (const key of [CONFIG.SESSION_KEY, CONFIG.USER_KEY, CONFIG.ORG_KEY, CONFIG.MEMBERSHIPS_KEY, REFRESH_KEY]) {
+      sessionStorage.removeItem(key);
+      localStorage.removeItem(key);
+    }
+    localStorage.removeItem(REMEMBER_KEY);
+  }
+
+  // Read a key from whichever store currently has it. localStorage
+  // wins when both are populated (canonical for remembered devices);
+  // falls back to sessionStorage for per-tab sessions.
+  function _readEither(key) {
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key) ?? null;
   }
 
   function _decodeJwt(token) {

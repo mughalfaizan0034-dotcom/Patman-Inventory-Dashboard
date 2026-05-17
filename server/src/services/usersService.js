@@ -5,7 +5,11 @@ import { AppError } from '../utils/errors.js';
 const BCRYPT_ROUNDS = 12;
 const VALID_ROLES   = ['admin', 'manager', 'viewer'];
 
-export function createUsersService({ usersRepo, membershipsRepo, usernameService }) {
+// `refreshTokensRepo` is optional so legacy callers / tests don't break,
+// but it MUST be wired in production so password changes (and account
+// deactivation) actually invalidate every active session. Without it,
+// a leaked refresh token survives a password reset until natural expiry.
+export function createUsersService({ usersRepo, membershipsRepo, usernameService, refreshTokensRepo }) {
 
   // Global list of every user with their active memberships.
   // Settings is admin-only and org-neutral — never scope to current workspace.
@@ -124,6 +128,19 @@ export function createUsersService({ usersRepo, membershipsRepo, usernameService
       if (updates.password.length < 8) throw new AppError(400, 'Password must be at least 8 characters');
       const hash = await bcrypt.hash(updates.password, BCRYPT_ROUNDS);
       await usersRepo.updatePasswordHash(userId, hash);
+      // Revoke every active refresh token for this user — any
+      // session that was holding the old password's authentication
+      // context is invalidated immediately. Frontend on next refresh
+      // attempt gets 401 → forced re-login. Standard enterprise
+      // behavior (Slack/GitHub/etc).
+      await refreshTokensRepo?.revokeAllByUserId?.(userId);
+    }
+
+    // Account deactivation also invalidates all active sessions —
+    // an inactive user shouldn't keep working in the app via a
+    // pre-deactivation refresh token.
+    if (updates.is_active === false) {
+      await refreshTokensRepo?.revokeAllByUserId?.(userId);
     }
 
     if (updates.organization_ids !== undefined) {

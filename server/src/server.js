@@ -19,6 +19,7 @@ import { createDashboardRepository } from './repositories/dashboardRepository.js
 import { createUploadsRepository } from './repositories/uploadsRepository.js';
 import { createActivityRepository } from './repositories/activityRepository.js';
 import { createLookupRepository } from './repositories/lookupRepository.js';
+import { createRefreshTokensRepository } from './repositories/refreshTokensRepository.js';
 
 import { createAuthService } from './services/authService.js';
 import { createInventoryService } from './services/inventoryService.js';
@@ -160,6 +161,7 @@ export async function buildApp() {
     const uploadsRepo      = createUploadsRepository(deps);
     const activityRepo     = createActivityRepository(deps);
     const lookupRepo       = createLookupRepository({ ...deps, logger: fastify.log });
+    const refreshTokensRepo = createRefreshTokensRepository(deps);
 
     // Services
     const usernameService  = createUsernameService({ usersRepo });
@@ -177,6 +179,10 @@ export async function buildApp() {
     // lets it run the comparison read without depending on the metrics service.
     const dashboardService = createDashboardService({ dashboardRepo, metricsService, ...deps, logger: fastify.log });
     const uploadsService   = createUploadsService({ uploadsRepo });
+    // usersService receives refreshTokensRepo so password changes /
+    // deactivations revoke every active refresh token for that user
+    // (audit C2 fix). Wired here so the service has the dependency
+    // before any route handler can call updateGlobalUser.
     // cloudTasksService enqueues summary-refresh tasks for the async
     // upload lifecycle. When the 4 TASKS_* env vars aren't all set, it
     // automatically falls back to inline refresh — same correctness,
@@ -192,7 +198,7 @@ export async function buildApp() {
       logger:         fastify.log,
     });
     console.log(`[BOOT] Cloud Tasks  enabled=${cloudTasksService.enabled}  queue=${env.TASKS_QUEUE_NAME || '(unset)'}  worker=${env.WORKER_BASE_URL || '(unset)'}`);
-    const usersService     = createUsersService({ usersRepo, membershipsRepo, usernameService });
+    const usersService     = createUsersService({ usersRepo, membershipsRepo, usernameService, refreshTokensRepo });
     const activityService  = createActivityService({ activityRepo });
     const lookupService    = createLookupService({ lookupRepo });
 
@@ -200,7 +206,7 @@ export async function buildApp() {
 
     console.log('[BOOT] registering routes');
     fastify.register(healthRoutes);
-    fastify.register(authRoutes,          { prefix: '/auth',          authService, usersRepo, membershipsRepo, tokenFactory });
+    fastify.register(authRoutes,          { prefix: '/auth',          authService, usersRepo, membershipsRepo, tokenFactory, refreshTokensRepo });
     fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService, metricsService, activityService, dashboardService, summaryRefreshService });
     fastify.register(ordersRoutes,        { prefix: '/orders',        ordersService,    activityService, dashboardService, summaryRefreshService });
     fastify.register(dashboardRoutes,     { prefix: '/dashboard',     dashboardService });

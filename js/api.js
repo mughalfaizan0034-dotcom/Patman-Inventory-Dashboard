@@ -21,29 +21,77 @@ const API = (() => {
   let _refreshPromise = null;
 
   function _forceLogout() {
-    sessionStorage.removeItem(CONFIG.SESSION_KEY);
-    sessionStorage.removeItem(CONFIG.USER_KEY);
-    sessionStorage.removeItem(CONFIG.ORG_KEY);
-    sessionStorage.removeItem(CONFIG.MEMBERSHIPS_KEY);
-    sessionStorage.removeItem('patman_refresh_token');
+    // Clear BOTH storages — Phase A "Remember this device" stores the
+    // refresh token + identity in localStorage when the user opted in.
+    // A forced logout must wipe both or the next page-load will silently
+    // restore the killed session.
+    for (const key of [CONFIG.SESSION_KEY, CONFIG.USER_KEY, CONFIG.ORG_KEY, CONFIG.MEMBERSHIPS_KEY, 'patman_refresh_token']) {
+      sessionStorage.removeItem(key);
+      localStorage.removeItem(key);
+    }
+    localStorage.removeItem('patman_remembered');
     window.dispatchEvent(new CustomEvent('auth:logout'));
+  }
+
+  // Read the refresh token from whichever storage currently has it.
+  // localStorage (remembered devices) takes priority because if both
+  // are populated, the remembered one is the canonical source of
+  // truth — sessionStorage is just a per-tab cache of it.
+  function _readRefresh() {
+    return localStorage.getItem('patman_refresh_token')
+        || sessionStorage.getItem('patman_refresh_token')
+        || null;
+  }
+
+  // Persist a rotated refresh token to whichever storage was
+  // originally used. Detected by which storage CURRENTLY holds a
+  // token at write time — covers the "remember" case (localStorage)
+  // and the per-tab case (sessionStorage) without needing the
+  // remember flag plumbed everywhere.
+  function _writeRefresh(token) {
+    if (!token) return;
+    if (localStorage.getItem('patman_refresh_token') !== null) {
+      localStorage.setItem('patman_refresh_token', token);
+    } else {
+      sessionStorage.setItem('patman_refresh_token', token);
+    }
   }
 
   function _attemptRefresh() {
     if (_refreshPromise) return _refreshPromise;
-    const storedRefresh   = sessionStorage.getItem('patman_refresh_token');
+    const storedRefresh      = _readRefresh();
     const storedMembershipId = _getMembershipIdFromToken();
     if (!storedRefresh) { _forceLogout(); return Promise.reject(new Error('Session expired')); }
     _refreshPromise = _crPostRaw('/auth/refresh', { refresh_token: storedRefresh, membership_id: storedMembershipId })
       .then(data => {
         sessionStorage.setItem(CONFIG.SESSION_KEY, data.access_token);
-        if (data.refresh_token) sessionStorage.setItem('patman_refresh_token', data.refresh_token);
+        if (data.refresh_token) _writeRefresh(data.refresh_token);
       })
-      .catch(err => {
-        // Only force-logout on 401 (token invalid, user inactive).
-        // 503/500/network errors = server issue — keep session so the user is not
-        // ejected due to a backend outage or a missing BigQuery table.
-        if (!err.status || err.status === 401) _forceLogout();
+      .catch(async err => {
+        // Multi-tab race: another tab may have rotated the refresh
+        // token between when we read it (storedRefresh) and when the
+        // server processed our request. Server returns 401 because
+        // our copy is now revoked. Re-read storage — if a different
+        // token is there now, retry ONCE before giving up.
+        if (err.status === 401) {
+          const current = _readRefresh();
+          if (current && current !== storedRefresh) {
+            try {
+              const data = await _crPostRaw('/auth/refresh', { refresh_token: current, membership_id: storedMembershipId });
+              sessionStorage.setItem(CONFIG.SESSION_KEY, data.access_token);
+              if (data.refresh_token) _writeRefresh(data.refresh_token);
+              return;
+            } catch {
+              _forceLogout();
+              throw err;
+            }
+          }
+          _forceLogout();
+          throw err;
+        }
+        // 503/500/network errors = server issue — keep session so the
+        // user is not ejected due to a backend outage.
+        if (!err.status) _forceLogout();
         throw err;
       })
       .finally(() => { _refreshPromise = null; });
@@ -243,18 +291,23 @@ const API = (() => {
   /* ── Public API ─────────────────────────────────────────── */
   return {
 
-    /* Auth — raw transport: never trigger 401 refresh on auth endpoints */
-    async login(username, password) {
-      const data = await _crPostRaw('/auth/login', { username, password });
+    /* Auth — raw transport: never trigger 401 refresh on auth endpoints.
+       Phase A "Remember this device" (2026-05-18): login + select-org
+       now accept a `remember` flag; logout POSTs the current refresh
+       token so the server can revoke it (audit C2 fix). */
+    async login(username, password, remember = false) {
+      const data = await _crPostRaw('/auth/login', { username, password, remember: !!remember });
       // data shape differs: single-org vs multi-org
       return data;
     },
 
-    async selectOrg(pendingToken, membershipId) {
+    async selectOrg(pendingToken, membershipId, remember) {
+      const body = { membership_id: membershipId };
+      if (remember !== undefined) body.remember = !!remember;
       const res = await _fetchWithTimeout(CONFIG.CLOUD_RUN_URL + '/auth/select-org', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pendingToken}` },
-        body:    JSON.stringify({ membership_id: membershipId }),
+        body:    JSON.stringify(body),
       }, CONFIG.TIMEOUT_MS);
       return _parseResponse(res);
     },
@@ -263,12 +316,14 @@ const API = (() => {
       return _crPost('/auth/switch-org', { membership_id: membershipId });
     },
 
-    async logout() {
-      sessionStorage.removeItem(CONFIG.SESSION_KEY);
-      sessionStorage.removeItem(CONFIG.USER_KEY);
-      sessionStorage.removeItem(CONFIG.ORG_KEY);
-      sessionStorage.removeItem(CONFIG.MEMBERSHIPS_KEY);
-      sessionStorage.removeItem('patman_refresh_token');
+    // Server-side logout: revokes the refresh token in the
+    // refresh_tokens table. Storage clearing happens in Auth.logout
+    // (js/auth.js) — this method ONLY hits the server. Best-effort:
+    // network / 503 failures don't block local logout.
+    async logout(refreshToken) {
+      try {
+        await _crPostRaw('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
+      } catch { /* best-effort; local logout still proceeds */ }
     },
 
     async refreshToken(refreshToken, membershipId) {
