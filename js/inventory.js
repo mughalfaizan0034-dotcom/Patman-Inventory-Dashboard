@@ -732,8 +732,19 @@ const InventoryList = (() => {
       MetricsEngine.invalidate();
 
       if (failed.length === 0) {
+        // Full success → close the modal + trigger the single deferred
+        // load() so the SKU View aggregate row updates.
         Notify.success('Saved', `${okCount} row${okCount === 1 ? '' : 's'} updated`);
-      } else if (okCount > 0) {
+        m.hide();
+        m.destroy();
+        if (_savesCommitted > 0) load();
+        return;
+      }
+
+      // Partial or full failure → keep modal open so the operator can
+      // see which rows failed (still tinted orange) and retry without
+      // re-opening. Toast carries the first failure reason.
+      if (okCount > 0) {
         Notify.warning('Partial save', `${okCount} saved · ${failed.length} failed (${failed[0].reason})`);
       } else {
         Notify.error('Save failed', failed[0]?.reason || 'No rows saved');
