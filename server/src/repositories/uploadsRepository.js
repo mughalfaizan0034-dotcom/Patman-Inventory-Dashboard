@@ -70,6 +70,132 @@ export function createUploadsRepository({ bq, projectId }) {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Async upload lifecycle helpers (Phase A — 2026-05-18).
+  //
+  // Flow:
+  //   1. createUploadJob       — INSERT with status='accepted' the moment
+  //                              the HTTP request parses the multipart.
+  //                              Lets /uploads/status/:upload_id answer
+  //                              immediately after the 202.
+  //   2. setUploadProcessing   — UPDATE status='processing' when the
+  //                              background worker actually starts Phase 2-4.
+  //   3. finalizeUploadJob     — UPDATE with the terminal status
+  //                              (success/partial/failed) + final report.
+  //   4. markUploadRefreshed   — UPDATE refreshed_at after the summary
+  //                              tables have been rebuilt by Cloud Tasks
+  //                              (or the in-process fallback).
+  //
+  // The status enum on disk widens from {success,partial,failed} to
+  // {accepted,processing,success,partial,failed}. Schema column is STRING
+  // so no migration needed for the enum widening itself; just the new
+  // `refreshed_at` + `last_error` columns (see migration
+  // 20260518_001_async_upload_lifecycle.sql).
+  // ─────────────────────────────────────────────────────────────────────
+  function _tableForType(type) {
+    return type === 'inventory' ? invUploads
+         : type === 'orders'    ? ordUploads
+         : null;
+  }
+
+  async function createUploadJob({ type, uploadId, organizationId, userId, filename }) {
+    const table = _tableForType(type);
+    if (!table) throw new Error(`Unknown upload type: ${type}`);
+    const query = `
+      INSERT INTO ${table}
+        (upload_id, organization_id, user_id, filename, row_count, status, report, created_at)
+      VALUES
+        (@uploadId, @organizationId, @userId, @filename, 0, 'accepted', NULL, CURRENT_TIMESTAMP())
+    `;
+    await bq.query({
+      query,
+      params: { uploadId, organizationId, userId: userId ?? null, filename: filename ?? `${type}.tsv` },
+    });
+  }
+
+  async function setUploadProcessing({ type, uploadId, organizationId }) {
+    const table = _tableForType(type);
+    if (!table) return;
+    const query = `
+      UPDATE ${table}
+      SET status = 'processing'
+      WHERE upload_id = @uploadId AND organization_id = @organizationId
+    `;
+    try { await bq.query({ query, params: { uploadId, organizationId } }); }
+    catch { /* non-fatal: the create may not have committed yet under retry */ }
+  }
+
+  async function finalizeUploadJob({ type, uploadId, organizationId, status, rowCount, report, lastError }) {
+    const table = _tableForType(type);
+    if (!table) return;
+    const query = `
+      UPDATE ${table}
+      SET status     = @status,
+          row_count  = @rowCount,
+          report     = @report,
+          last_error = @lastError
+      WHERE upload_id = @uploadId AND organization_id = @organizationId
+    `;
+    await bq.query({
+      query,
+      params: {
+        uploadId, organizationId, status,
+        rowCount:  rowCount ?? 0,
+        report:    report   ?? null,
+        lastError: lastError ?? null,
+      },
+      types: { report: 'STRING', lastError: 'STRING' },
+    });
+  }
+
+  async function markUploadRefreshed({ type, uploadId, organizationId }) {
+    const table = _tableForType(type);
+    if (!table) return;
+    const query = `
+      UPDATE ${table}
+      SET refreshed_at = CURRENT_TIMESTAMP()
+      WHERE upload_id = @uploadId AND organization_id = @organizationId
+    `;
+    try { await bq.query({ query, params: { uploadId, organizationId } }); }
+    catch { /* non-fatal */ }
+  }
+
+  // Status polling target. Surface every column the UI needs to render
+  // the processing-state badge + progress + final summary in one round-trip.
+  async function getUploadStatus(organizationId, uploadId) {
+    const query = `
+      SELECT 'inventory' AS type, upload_id, status, row_count,
+             created_at, refreshed_at, last_error,
+             (report IS NOT NULL AND report != '') AS has_report
+      FROM ${invUploads}
+      WHERE organization_id = @organizationId AND upload_id = @uploadId
+      UNION ALL
+      SELECT 'orders' AS type, upload_id, status, row_count,
+             created_at, refreshed_at, last_error,
+             (report IS NOT NULL AND report != '') AS has_report
+      FROM ${ordUploads}
+      WHERE organization_id = @organizationId AND upload_id = @uploadId
+      LIMIT 1
+    `;
+    try {
+      const [rows] = await bq.query({ query, params: { organizationId, uploadId } });
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        type:         r.type,
+        upload_id:    r.upload_id,
+        status:       r.status,
+        row_count:    Number(r.row_count ?? 0),
+        created_at:   r.created_at?.value   ?? r.created_at   ?? null,
+        refreshed_at: r.refreshed_at?.value ?? r.refreshed_at ?? null,
+        last_error:   r.last_error ?? null,
+        has_report:   !!r.has_report,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // Fetch the stored report text for a single upload (admin / member only;
   // route enforces org scoping). Returns null if not found or no report.
   async function getUploadReport(organizationId, uploadId) {
@@ -403,5 +529,7 @@ export function createUploadsRepository({ bq, projectId }) {
     getInventoryKeySet, getOrderKeySet,
     updateInventoryByRowUid, updateOrdersByOrderId,
     deleteInventoryByRowUids, deleteOrdersByOrderIds,
+    // Async upload lifecycle (Phase A — 2026-05-18)
+    createUploadJob, setUploadProcessing, finalizeUploadJob, markUploadRefreshed, getUploadStatus,
   };
 }

@@ -117,14 +117,39 @@ const Uploads = (() => {
     return { setFile, clearFile, getFile: () => selectedFile };
   }
 
-  /* ── Upload logic ───────────────────────────────────────── */
+  /* ── Upload logic ───────────────────────────────────────────
+     Phase A async lifecycle (2026-05-18):
+
+       1. POST /uploads/{inventory,orders} now returns 202 with
+          { upload_id, status: 'accepted' } within ~2-5 s for any
+          upload size. The actual Phase 2-4 DML + summary refresh
+          run in the background on the Cloud Run instance.
+
+       2. Frontend polls GET /uploads/status/:upload_id every
+          POLL_INTERVAL_MS until phase ∈ { complete, failed }.
+
+       3. Step labels track the server's reported `phase`:
+            'accepted'   → row 0 (Queued)
+            'processing' → row 1 (Writing rows)
+            'refreshing' → row 2 (Refreshing analytics)
+            'complete'   → row 3 (Done)
+            'failed'     → terminal error
+  */
   const _UPLOAD_STEPS = [
-    { label: 'Parsing',     pct: 18 },
-    { label: 'Validating',  pct: 42 },
-    { label: 'Calculating', pct: 68 },
-    { label: 'Syncing',     pct: 85 },
+    { label: 'Queued',                pct: 15 },
+    { label: 'Writing rows',          pct: 55 },
+    { label: 'Refreshing analytics',  pct: 85 },
+    { label: 'Complete',              pct: 100 },
   ];
-  const _STEP_DELAYS = [0, 800, 1800, 3000]; // ms after upload starts
+  const _PHASE_TO_STEP = {
+    accepted:   0,
+    processing: 1,
+    refreshing: 2,
+    complete:   3,
+    failed:    -1,
+  };
+  const _POLL_INTERVAL_MS = 2000;
+  const _POLL_MAX_MS      = 15 * 60 * 1000; // 15 min hard ceiling
 
   function _stepsHtml(activeIdx) {
     return `<div class="upload-steps">${
@@ -134,6 +159,37 @@ const Uploads = (() => {
         return `<div class="upload-step ${cls}"><span class="upload-step-dot">${icon}</span><span class="upload-step-label">${s.label}</span></div>`;
       }).join('')
     }</div>`;
+  }
+
+  function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function _pollUntilTerminal(uploadId, onPhase) {
+    const start = Date.now();
+    let lastPhase = null;
+    while (Date.now() - start < _POLL_MAX_MS) {
+      let row;
+      try { row = await API.getUploadStatus(uploadId); }
+      catch (err) {
+        // 404 right after 202 can happen during BQ DML eventual
+        // consistency. Tolerate a brief window then surface.
+        if (err.status === 404 && Date.now() - start < 5000) {
+          await _sleep(_POLL_INTERVAL_MS);
+          continue;
+        }
+        throw err;
+      }
+      if (row?.phase && row.phase !== lastPhase) {
+        lastPhase = row.phase;
+        onPhase?.(row);
+      }
+      if (row?.phase === 'complete' || row?.phase === 'failed') {
+        return row;
+      }
+      await _sleep(_POLL_INTERVAL_MS);
+    }
+    const err = new Error('Upload processing timed out (15 min). Check /admin/summary-status for the org.');
+    err.timeoutAfter = true;
+    throw err;
   }
 
   async function _doUpload(file, fileType, btn, zoneId) {
@@ -148,56 +204,102 @@ const Uploads = (() => {
 
     const setProgress = pct => { if (progressBar) progressBar.style.width = pct + '%'; };
 
-    // Animate step indicators while request is in-flight
-    const _stepTimers = [];
-    function _advanceStep(idx) {
+    function _showPhase(phase) {
+      const idx = _PHASE_TO_STEP[phase] ?? 0;
+      if (idx < 0) {
+        if (statusEl) statusEl.innerHTML = _stepsHtml(_UPLOAD_STEPS.length); // all marked done so user sees the terminal-fail badge below
+        return;
+      }
       if (statusEl) statusEl.innerHTML = _stepsHtml(idx);
-      setProgress(_UPLOAD_STEPS[idx].pct);
+      const pct = _UPLOAD_STEPS[idx]?.pct ?? 0;
+      setProgress(pct);
     }
-    _STEP_DELAYS.forEach((delay, i) => {
-      _stepTimers.push(setTimeout(() => _advanceStep(i), delay));
-    });
 
     try {
       const apiMethod = fileType === 'inventory' ? API.uploadInventory : API.uploadOrders;
-      const result    = await apiMethod(file);
 
-      _stepTimers.forEach(clearTimeout);
-      setProgress(100);
-      if (progressBar) progressBar.classList.add('success');
-
-      const added   = result.added   ?? 0;
-      const updated = result.updated ?? 0;
-      const removed = result.removed ?? 0;
-      const failed  = result.failed  ?? 0;
-      const errors  = result.errors  ?? [];
-      const total   = added + updated + removed;
-
-      if (statusEl) {
-        const badges = [
-          added   > 0 ? Utils.badgeHtml('success', `${added} added`)     : '',
-          updated > 0 ? Utils.badgeHtml('info',    `${updated} updated`) : '',
-          removed > 0 ? Utils.badgeHtml('gray',    `${removed} removed`) : '',
-          failed  > 0 ? Utils.badgeHtml('warning', `${failed} failed`)   : '',
-        ].filter(Boolean).join(' ');
-
-        statusEl.innerHTML = `
-          <div style="margin-top:10px;font-size:13px">${badges || Utils.badgeHtml('gray', 'No rows processed')}</div>
-          ${errors.length > 0 ? _renderErrors(errors) : ''}`;
+      // Step 1: HTTP request — returns 202 in ~2-5 s for any size.
+      _showPhase('accepted');
+      const accept = await apiMethod(file);
+      const uploadId = accept?.upload_id;
+      if (!uploadId) {
+        // Legacy synchronous response — server returned full result
+        // (shouldn't happen with the new lifecycle, but tolerate it).
+        _renderTerminal(accept, { statusEl, progressBar, setProgress });
+        MetricsEngine.invalidate();
+        loadHistory();
+        return;
       }
 
+      // Step 2: poll until terminal.
+      const final = await _pollUntilTerminal(uploadId, row => _showPhase(row.phase));
+
+      if (final.phase === 'failed') {
+        if (progressBar) progressBar.classList.add('error');
+        if (statusEl) {
+          statusEl.innerHTML = `<div class="form-error" style="margin-top:8px">${Utils.escapeHtml(final.last_error || 'Upload failed')}</div>`;
+        }
+        Notify.error('Upload failed', final.last_error || 'See upload report for details');
+        loadHistory();
+        return;
+      }
+
+      // Complete — fetch the upload row from history for the final
+      // counts. The status row carries row_count + report flag; the
+      // user-visible breakdown (added/updated/removed/failed) lives
+      // in the report, so we render a simple success badge here.
+      setProgress(100);
+      if (progressBar) progressBar.classList.add('success');
+      const total = final.row_count ?? 0;
+      if (statusEl) {
+        const statusBadge = Utils.badgeHtml(
+          final.status === 'partial' ? 'warning' : 'success',
+          `${final.status} · ${total.toLocaleString()} row${total === 1 ? '' : 's'} processed`,
+        );
+        statusEl.innerHTML = `<div style="margin-top:10px;font-size:13px">${statusBadge}</div>
+          <div style="margin-top:6px;font-size:12px;color:var(--txt-3)">
+            Open <strong>Upload History</strong> below for the per-row report.
+          </div>`;
+      }
       MetricsEngine.invalidate();
-      Notify.success('Upload complete', `${total} row${total !== 1 ? 's' : ''} processed (${added} added, ${updated} updated, ${removed} removed).`);
+      Notify.success('Upload complete', `${total.toLocaleString()} row${total === 1 ? '' : 's'} processed.`);
       loadHistory();
     } catch (err) {
-      _stepTimers.forEach(clearTimeout);
       if (progressBar) progressBar.classList.add('error');
       if (statusEl) statusEl.innerHTML = `<div class="form-error" style="margin-top:8px">${Utils.escapeHtml(err.message)}</div>`;
       Notify.apiError(err);
     } finally {
       Loading.btn(btn, false);
-      setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 4000);
+      setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 6000);
     }
+  }
+
+  // Legacy synchronous-response renderer — retained as a fallback for
+  // pre-Phase-A server responses (where the upload completed inside
+  // the request and returned the full counts directly).
+  function _renderTerminal(result, { statusEl, progressBar, setProgress }) {
+    setProgress?.(100);
+    if (progressBar) progressBar.classList.add('success');
+    const added   = result.added   ?? 0;
+    const updated = result.updated ?? 0;
+    const removed = result.removed ?? 0;
+    const failed  = result.failed  ?? 0;
+    const errors  = result.errors  ?? [];
+    const total   = added + updated + removed;
+
+    if (statusEl) {
+      const badges = [
+        added   > 0 ? Utils.badgeHtml('success', `${added} added`)     : '',
+        updated > 0 ? Utils.badgeHtml('info',    `${updated} updated`) : '',
+        removed > 0 ? Utils.badgeHtml('gray',    `${removed} removed`) : '',
+        failed  > 0 ? Utils.badgeHtml('warning', `${failed} failed`)   : '',
+      ].filter(Boolean).join(' ');
+
+      statusEl.innerHTML = `
+        <div style="margin-top:10px;font-size:13px">${badges || Utils.badgeHtml('gray', 'No rows processed')}</div>
+        ${errors.length > 0 ? _renderErrors(errors) : ''}`;
+    }
+    Notify.success('Upload complete', `${total} row${total !== 1 ? 's' : ''} processed (${added} added, ${updated} updated, ${removed} removed).`);
   }
 
   function _formatErrorReason(e) {

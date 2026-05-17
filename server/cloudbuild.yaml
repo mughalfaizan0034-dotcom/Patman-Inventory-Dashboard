@@ -39,10 +39,26 @@ steps:
       - --memory=512Mi
       - --cpu=1
       - --concurrency=20
-      - --timeout=60
+      # Phase A async upload lifecycle (2026-05-18):
+      #   --timeout=540  → max Cloud Run Gen1 request budget. Even with
+      #     the 202-fast-path, large org uploads can run >5 min of DML
+      #     in-process AFTER the response; Cloud Run keeps the instance
+      #     alive only while a request is in flight, so the worker
+      #     window equals the timeout. 540s covers 100k-row inserts.
+      #   --min-instances=1 → keeps one instance always warm so the
+      #     background processor that runs after 202 isn't scaled away
+      #     mid-write. Costs ~$3-5/mo for the warm instance. Without
+      #     this, scale-down can leave uploads stuck in 'processing'.
+      - --timeout=540
+      - --min-instances=1
       # Uncomment after creating the dedicated service account:
       # - --service-account=patman-api@$PROJECT_ID.iam.gserviceaccount.com
       - --set-secrets=JWT_SECRET=patman-jwt-secret:latest
+      # CORS_ORIGIN — additive allowlist; GitHub Pages origin is
+      # ALSO hardcoded in server.js so this can be empty without breaking prod.
+      # TASKS_* — leave UNSET until the operator creates the Cloud Tasks
+      # queue (see docs/AUDIT_FOLLOWUP.md). cloudTasksService falls back
+      # to inline refresh when any of the four is missing.
       - --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,CORS_ORIGIN=https://mughalfaizan0034-dotcom.github.io,NODE_ENV=production,LOG_LEVEL=info,DEBUG_ROUTES=true
 
 images:

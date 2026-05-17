@@ -2,6 +2,14 @@ import { randomUUID } from 'crypto';
 import { parseTxtStream } from './txtStreamParser.js';
 import { AppError } from '../../utils/errors.js';
 
+// Phase A async lifecycle (2026-05-18): when an `uploadId` is supplied
+// by the caller, pipelineRunner uses it as the row identifier and
+// SKIPS the final logUpload INSERT — the caller has already created an
+// `accepted` row via uploadsRepo.createUploadJob and is responsible for
+// finalizing the terminal status afterwards. When no `uploadId` is
+// supplied, the runner falls back to the legacy self-insert path
+// (kept so direct callers / scripts don't break).
+
 // Per-operation chunk sizes. Removes can be much larger because the DELETE
 // payload is just a list of UIDs — BigQuery DML handles 10K-element UNNEST
 // arrays comfortably. Add/Update payloads are heavier (full row data), so
@@ -21,7 +29,7 @@ const MAX_ERRORS = 200;
  *
  * @returns {{ upload_id, added, updated, removed, failed, errors, filename }}
  */
-export async function runUploadPipeline({ importer, uploadsRepo, organizationId, userId, stream, filename }) {
+export async function runUploadPipeline({ importer, uploadsRepo, organizationId, userId, stream, filename, uploadId: existingUploadId = null }) {
   const { schema } = importer;
 
   const adds    = []; // [{ row, lineNum }]
@@ -171,25 +179,31 @@ export async function runUploadPipeline({ importer, uploadsRepo, organizationId,
                : (failed > 0)                       ? 'partial'
                :                                      'success';
 
-  const uploadId = randomUUID();
+  const uploadId = existingUploadId || randomUUID();
   const report   = _buildReportText({
     filename, type: importer.type, status,
     added, updated, removed, failed, errors,
     timestamp: new Date(),
   });
 
-  await importer.logUpload(uploadsRepo, {
-    uploadId,
-    organizationId,
-    userId,
-    filename: filename || `${importer.type}.txt`,
-    rowCount: successCount,
-    status,
-    report,
-  }).catch(err => { /* non-fatal — main operation already committed */
-    // eslint-disable-next-line no-console
-    console.warn('[pipelineRunner] logUpload failed (non-fatal):', err?.message ?? err);
-  });
+  // Legacy path: when the caller didn't pre-create a job row (e.g.
+  // direct script invocation), do the original final INSERT so the
+  // Upload History table still has an audit entry. The new async
+  // upload route ALWAYS supplies uploadId and finalizes itself.
+  if (!existingUploadId) {
+    await importer.logUpload(uploadsRepo, {
+      uploadId,
+      organizationId,
+      userId,
+      filename: filename || `${importer.type}.txt`,
+      rowCount: successCount,
+      status,
+      report,
+    }).catch(err => { /* non-fatal — main operation already committed */
+      // eslint-disable-next-line no-console
+      console.warn('[pipelineRunner] logUpload failed (non-fatal):', err?.message ?? err);
+    });
+  }
 
   return { upload_id: uploadId, added, updated, removed, failed, errors, filename, status, report };
 }

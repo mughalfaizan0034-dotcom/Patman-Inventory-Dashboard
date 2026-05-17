@@ -313,9 +313,13 @@ const API = (() => {
     async getActivity(limit=10)                                                { return _crGet('/activity', { limit }); },
     async getLogs(limit=20)                                                   { return _crGet('/activity', { limit }); },
 
-    /* Uploads — file is a File object (multipart) */
+    /* Uploads — file is a File object (multipart).
+       Phase A async lifecycle (2026-05-18): these now return 202 with
+       { upload_id, status: 'accepted' }. Use getUploadStatus(uploadId)
+       to poll for terminal status — see js/uploads.js _doUpload. */
     async uploadInventory(file) { return _crMultipart('/uploads/inventory', file); },
     async uploadOrders(file)    { return _crMultipart('/uploads/orders', file); },
+    async getUploadStatus(uploadId) { return _crGet(`/uploads/status/${encodeURIComponent(uploadId)}`); },
     async getUploadHistory(type='') { return _crGet('/uploads/history', { type }); },
     async downloadTemplate(type)    { return _crGet(`/uploads/template/${type}`); },
 

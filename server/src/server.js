@@ -26,6 +26,7 @@ import { createOrdersService } from './services/ordersService.js';
 import { createDashboardService } from './services/dashboardService.js';
 import { createInventoryMetricsService } from './services/inventoryMetricsService.js';
 import { createSummaryRefreshService } from './services/summaryRefreshService.js';
+import { createCloudTasksService } from './services/cloudTasksService.js';
 import { createUploadsService } from './services/uploadsService.js';
 import { createUsersService } from './services/usersService.js';
 import { createUsernameService } from './services/usernameService.js';
@@ -44,6 +45,7 @@ import { organizationsRoutes } from './routes/organizations.js';
 import { activityRoutes } from './routes/activity.js';
 import { lookupRoutes } from './routes/lookup.js';
 import { adminRoutes } from './routes/admin.js';
+import { tasksRoutes } from './routes/tasks.js';
 
 export async function buildApp() {
   const fastify = Fastify({
@@ -175,6 +177,21 @@ export async function buildApp() {
     // lets it run the comparison read without depending on the metrics service.
     const dashboardService = createDashboardService({ dashboardRepo, metricsService, ...deps, logger: fastify.log });
     const uploadsService   = createUploadsService({ uploadsRepo });
+    // cloudTasksService enqueues summary-refresh tasks for the async
+    // upload lifecycle. When the 4 TASKS_* env vars aren't all set, it
+    // automatically falls back to inline refresh — same correctness,
+    // just no out-of-band scheduling. See createCloudTasksService docs.
+    const cloudTasksService = createCloudTasksService({
+      projectId:      env.GCP_PROJECT_ID,
+      location:       env.TASKS_LOCATION,
+      queueName:      env.TASKS_QUEUE_NAME,
+      workerBaseUrl:  env.WORKER_BASE_URL,
+      invokerSA:      env.TASKS_INVOKER_SA,
+      summaryRefreshService,
+      uploadsRepo,
+      logger:         fastify.log,
+    });
+    console.log(`[BOOT] Cloud Tasks  enabled=${cloudTasksService.enabled}  queue=${env.TASKS_QUEUE_NAME || '(unset)'}  worker=${env.WORKER_BASE_URL || '(unset)'}`);
     const usersService     = createUsersService({ usersRepo, membershipsRepo, usernameService });
     const activityService  = createActivityService({ activityRepo });
     const lookupService    = createLookupService({ lookupRepo });
@@ -187,13 +204,17 @@ export async function buildApp() {
     fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService, metricsService, activityService, dashboardService, summaryRefreshService });
     fastify.register(ordersRoutes,        { prefix: '/orders',        ordersService,    activityService, dashboardService, summaryRefreshService });
     fastify.register(dashboardRoutes,     { prefix: '/dashboard',     dashboardService });
-    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService, dashboardService, summaryRefreshService });
+    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService, dashboardService, summaryRefreshService, uploadsRepo, cloudTasksService });
     fastify.register(usersRoutes,         { prefix: '/users',         usersService });
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
     fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo, usersRepo, summaryRefreshService });
     fastify.register(activityRoutes,      { prefix: '/activity',      activityService });
     fastify.register(lookupRoutes,        { prefix: '/lookup',        lookupService });
     fastify.register(adminRoutes,         { prefix: '/admin',         ...deps, summaryRefreshService, orgsRepo });
+    // Cloud Tasks worker routes — protected by OIDC verification
+    // (verifies the JWT was signed by TASKS_INVOKER_SA with the
+    // expected audience). Not user-callable.
+    fastify.register(tasksRoutes,         { prefix: '/tasks',         summaryRefreshService, uploadsRepo, env });
     console.log('[BOOT] all route plugins registered');
 
     if (process.env.DEBUG_ROUTES === 'true') {
