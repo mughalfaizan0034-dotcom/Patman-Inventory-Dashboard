@@ -22,7 +22,7 @@ function validateUploadFile(part) {
   return null;
 }
 
-export async function uploadsRoutes(fastify, { uploadsService, dashboardService }) {
+export async function uploadsRoutes(fastify, { uploadsService, dashboardService, summaryRefreshService }) {
 
   fastify.post(
     '/inventory',
@@ -44,6 +44,9 @@ export async function uploadsRoutes(fastify, { uploadsService, dashboardService 
           organization_id, user_id, part.file, part.filename
         );
         dashboardService?.invalidateKPICache(organization_id);
+        // Fire-and-forget summary rebuild. Refresh failures are logged
+        // inside the service; the upload response is unaffected.
+        summaryRefreshService?.refresh(organization_id).catch(() => {});
 
         request.log.info(
           { event: 'inventory_upload', user_id, organization_id, added: result.added, updated: result.updated, removed: result.removed },
@@ -80,6 +83,9 @@ export async function uploadsRoutes(fastify, { uploadsService, dashboardService 
           organization_id, user_id, part.file, part.filename
         );
         dashboardService?.invalidateKPICache(organization_id);
+        // Fire-and-forget summary rebuild. Refresh failures are logged
+        // inside the service; the upload response is unaffected.
+        summaryRefreshService?.refresh(organization_id).catch(() => {});
 
         request.log.info(
           { event: 'orders_upload', user_id, organization_id, added: result.added, updated: result.updated, removed: result.removed },

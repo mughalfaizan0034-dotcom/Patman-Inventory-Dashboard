@@ -70,7 +70,7 @@ const patchSchema = z.object({
   original_sku:     z.string().optional().default(''),
 });
 
-export async function ordersRoutes(fastify, { ordersService, activityService, dashboardService }) {
+export async function ordersRoutes(fastify, { ordersService, activityService, dashboardService, summaryRefreshService }) {
   fastify.get('/export', { preHandler: [authenticate] }, async (request, reply) => {
     const parsed = ordersExportSchema.safeParse(request.query);
     if (!parsed.success) {
@@ -163,6 +163,7 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
     try {
       await ordersService.updateRow(request.user.organization_id, rowId, updates);
       dashboardService?.invalidateKPICache(request.user.organization_id);
+      summaryRefreshService?.refresh(request.user.organization_id).catch(() => {});
       const originalLabel = original_sku || rowId;
       const isFullSku     = normalizedShippedSku && /^ARA\d+-.+-.+$/i.test(normalizedShippedSku);
       const desc = !normalizedShippedSku
@@ -203,6 +204,7 @@ export async function ordersRoutes(fastify, { ordersService, activityService, da
         } : null,
       });
       dashboardService?.invalidateKPICache(request.user.organization_id);
+      summaryRefreshService?.refresh(request.user.organization_id).catch(() => {});
       activityService?.log({
         organizationId: request.user.organization_id,
         userId:         request.user.user_id,

@@ -73,7 +73,7 @@ function prepareSkuStructure(raw) {
   return { value: normalized ? JSON.stringify(normalized) : null };
 }
 
-export async function organizationsRoutes(fastify, { orgsRepo, membershipsRepo, usersRepo }) {
+export async function organizationsRoutes(fastify, { orgsRepo, membershipsRepo, usersRepo, summaryRefreshService }) {
   const { randomUUID } = await import('crypto');
 
   // Reconcile an org's member roster with a target list of user_ids.
@@ -212,6 +212,12 @@ export async function organizationsRoutes(fastify, { orgsRepo, membershipsRepo, 
 
       if (parsed.data.member_user_ids !== undefined) {
         await syncOrgMembers(request.params.id, parsed.data.member_user_ids);
+      }
+
+      // sku_structure update changes how SKUs are classified as Undefined.
+      // Rebuild summaries so the new classification is reflected immediately.
+      if (parsed.data.sku_structure !== undefined) {
+        summaryRefreshService?.refresh(request.params.id).catch(() => {});
       }
 
       request.log.info({ event: 'org_updated', organization_id: request.params.id, by: request.user.user_id }, 'Organization updated');

@@ -28,7 +28,7 @@ const deleteBodySchema = z.object({
   row_uids: z.array(z.string().min(1)).min(1),
 });
 
-export async function inventoryRoutes(fastify, { inventoryService, metricsService, activityService, dashboardService }) {
+export async function inventoryRoutes(fastify, { inventoryService, metricsService, activityService, dashboardService, summaryRefreshService }) {
   // SKU-aggregated view — single source of truth for the Inventory page.
   // Backed by inventoryMetricsService.getSkuSummary which reuses the
   // SAME CTEs that drive dashboard KPI sums.
@@ -161,6 +161,7 @@ export async function inventoryRoutes(fastify, { inventoryService, metricsServic
     try {
       await inventoryService.updateRow(request.user.organization_id, rowUid, parsed.data);
       dashboardService?.invalidateKPICache(request.user.organization_id);
+      summaryRefreshService?.refresh(request.user.organization_id).catch(() => {});
       activityService?.log({
         organizationId: request.user.organization_id,
         userId:         request.user.user_id,
@@ -183,6 +184,7 @@ export async function inventoryRoutes(fastify, { inventoryService, metricsServic
     try {
       const result = await inventoryService.deleteRows(request.user.organization_id, parsed.data.row_uids);
       dashboardService?.invalidateKPICache(request.user.organization_id);
+      summaryRefreshService?.refresh(request.user.organization_id).catch(() => {});
       activityService?.log({
         organizationId: request.user.organization_id,
         userId:         request.user.user_id,

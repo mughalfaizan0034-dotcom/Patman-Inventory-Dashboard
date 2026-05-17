@@ -25,6 +25,7 @@ import { createInventoryService } from './services/inventoryService.js';
 import { createOrdersService } from './services/ordersService.js';
 import { createDashboardService } from './services/dashboardService.js';
 import { createInventoryMetricsService } from './services/inventoryMetricsService.js';
+import { createSummaryRefreshService } from './services/summaryRefreshService.js';
 import { createUploadsService } from './services/uploadsService.js';
 import { createUsersService } from './services/usersService.js';
 import { createUsernameService } from './services/usernameService.js';
@@ -143,7 +144,15 @@ export async function buildApp() {
     const inventoryService = createInventoryService({ inventoryRepo });
     const ordersService    = createOrdersService({ ordersRepo });
     const metricsService   = createInventoryMetricsService({ ...deps, orgsRepo });
-    const dashboardService = createDashboardService({ dashboardRepo, metricsService });
+    // summaryRefreshService rebuilds the materialized summary tables for one
+    // org after every mutating operation. It is the ONLY writer to those
+    // tables. Inject `fastify.log` as the structured logger so its non-fatal
+    // failures show up in Cloud Run logs alongside the originating request.
+    const summaryRefreshService = createSummaryRefreshService({ ...deps, orgsRepo, logger: fastify.log });
+    // dashboardService also reads dashboard_summary for Phase A parity logging
+    // (only fires when env SUMMARY_PARITY_LOG=1). The bq + projectId injection
+    // lets it run the comparison read without depending on the metrics service.
+    const dashboardService = createDashboardService({ dashboardRepo, metricsService, ...deps, logger: fastify.log });
     const uploadsService   = createUploadsService({ uploadsRepo });
     const usersService     = createUsersService({ usersRepo, membershipsRepo, usernameService });
     const activityService  = createActivityService({ activityRepo });
@@ -154,13 +163,13 @@ export async function buildApp() {
     console.log('[BOOT] registering routes');
     fastify.register(healthRoutes);
     fastify.register(authRoutes,          { prefix: '/auth',          authService, usersRepo, membershipsRepo, tokenFactory });
-    fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService, metricsService, activityService, dashboardService });
-    fastify.register(ordersRoutes,        { prefix: '/orders',        ordersService,    activityService, dashboardService });
+    fastify.register(inventoryRoutes,     { prefix: '/inventory',     inventoryService, metricsService, activityService, dashboardService, summaryRefreshService });
+    fastify.register(ordersRoutes,        { prefix: '/orders',        ordersService,    activityService, dashboardService, summaryRefreshService });
     fastify.register(dashboardRoutes,     { prefix: '/dashboard',     dashboardService });
-    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService, dashboardService });
+    fastify.register(uploadsRoutes,       { prefix: '/uploads',       uploadsService, dashboardService, summaryRefreshService });
     fastify.register(usersRoutes,         { prefix: '/users',         usersService });
     fastify.register(membershipsRoutes,   { prefix: '/memberships',   membershipsRepo });
-    fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo, usersRepo });
+    fastify.register(organizationsRoutes, { prefix: '/organizations', orgsRepo, membershipsRepo, usersRepo, summaryRefreshService });
     fastify.register(activityRoutes,      { prefix: '/activity',      activityService });
     fastify.register(lookupRoutes,        { prefix: '/lookup',        lookupService });
     console.log('[BOOT] all route plugins registered');
