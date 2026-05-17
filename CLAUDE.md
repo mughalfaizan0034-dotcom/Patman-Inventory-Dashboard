@@ -73,11 +73,20 @@ doesn't actually invalidate refresh tokens on the server.
 - **Frontend `MetricsEngine`**: per-tab, invalidated on every mutating
   user action and on org switch.
 
-**Future direction (see "Materialized summary tables" in AUDIT_FOLLOWUP.md)**:
-move from on-demand CTE re-execution to materialized summary tables
-(`dashboard_summary`, `inventory_summary`, `box_summary`) refreshed on
-upload/edit/delete. Will let the 60s cache come out and dashboard reads
-become single-row SELECTs.
+**Materialized summary tables (Phase A LANDED · Phase B PENDING)**:
+- `dashboard_summary`, `inventory_summary`, `box_summary` BQ tables exist
+  (see `server/sql/migrations/20260517_002_materialized_summaries.sql` —
+  MUST be run by operator before deploy).
+- `summaryRefreshService.refresh(orgId)` is the ONLY writer to those
+  tables. Wired into every mutating route (uploads, inventory CRUD,
+  orders CRUD, org sku_structure update). Refresh failures are
+  fire-and-forget; the originating mutation never fails.
+- Read paths still use live CTEs. Parity logging gates the cutover:
+  set env `SUMMARY_PARITY_LOG=1` to log `dashboard_summary` vs live
+  CTE on every `getKPIs` call. After 24h with zero diffs, perform
+  Phase B (see [docs/AUDIT_FOLLOWUP.md](docs/AUDIT_FOLLOWUP.md)).
+- After Phase B cutover the in-memory KPI cache becomes redundant and
+  can be removed; reads collapse to a single row-per-org SELECT.
 
 ## Audit follow-up
 

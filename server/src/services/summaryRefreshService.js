@@ -1,6 +1,6 @@
 import { TABLES } from '../config/tables.js';
-import { isUndefinedSql } from '../utils/inventoryPatterns.js';
 import { effectiveSkuSql, wrongPartSql } from '../utils/skuPatterns.js';
+import { ordersAggCTE, invAggCTE, perSkuCTE } from '../utils/skuPivots.js';
 
 /**
  * summaryRefreshService — rebuilds the three materialized summary tables

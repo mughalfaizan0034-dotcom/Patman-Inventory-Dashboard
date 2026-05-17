@@ -1,6 +1,7 @@
 import { TABLES } from '../config/tables.js';
-import { isUndefinedSql, isUndefinedRowSql } from '../utils/inventoryPatterns.js';
+import { isUndefinedRowSql } from '../utils/inventoryPatterns.js';
 import { effectiveSkuSql, wrongPartSql } from '../utils/skuPatterns.js';
+import { ordersAggCTE, invAggCTE, perSkuCTE } from '../utils/skuPivots.js';
 
 /**
  * inventoryMetricsService — single source of truth for dashboard KPI math.
@@ -47,31 +48,13 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
   const ordTable = `\`${projectId}.${TABLES.ORDERS}\``;
 
-  // Orders aggregated by effective SKU (shipped_sku override applied).
-  const _ordersAggCTE = () => `
-    orders_agg AS (
-      SELECT
-        ${effectiveSkuSql()} AS effective_sku,
-        SUM(quantity_sold) AS ordered
-      FROM ${ordTable}
-      WHERE organization_id = @organizationId
-      GROUP BY effective_sku
-    )`;
-
-  // Inventory aggregated by SKU. When the caller passes a structure regex
-  // it is bound as @sku_regex and the placeholder check is OR'd with a
-  // REGEXP_CONTAINS test so structurally-invalid SKUs roll into the same
-  // "undefined" bucket — single source of truth for the Undefined KPI.
-  const _invAggCTE = (regexParam) => `
-    inv_agg AS (
-      SELECT
-        sku,
-        SUM(quantity)         AS sku_qty,
-        ${isUndefinedSql('sku', regexParam ? { regexParam } : {})} AS sku_is_undefined
-      FROM ${invTable}
-      WHERE organization_id = @organizationId
-      GROUP BY sku
-    )`;
+  // CTE builders are imported from utils/skuPivots.js — the single source
+  // of truth for the centralized allocation engine's SQL building blocks.
+  // Both this service and summaryRefreshService consume the same fragments,
+  // so live computation and materialized rebuild can never drift apart.
+  const _ordersAggCTE  = ()           => ordersAggCTE({ ordTable });
+  const _invAggCTE     = (regexParam) => invAggCTE({ invTable, regexParam });
+  const _perSkuCTE     = ()           => perSkuCTE();
 
   // Resolve the org's compiled regex (cached in the repo). Returns null
   // when no structure is configured — callers should skip the param.
@@ -80,22 +63,6 @@ export function createInventoryMetricsService({ bq, projectId, orgsRepo }) {
     try { return await orgsRepo.getSkuRegex(organizationId); }
     catch { return null; }
   }
-
-  // Per-SKU pivot row: one row per distinct SKU, with the user's pivot
-  // formulas applied to (sku_qty, ordered).
-  const _perSkuCTE = () => `
-    per_sku AS (
-      SELECT
-        i.sku,
-        i.sku_qty                                            AS initial,
-        COALESCE(o.ordered, 0)                               AS sold,
-        LEAST(COALESCE(o.ordered, 0), i.sku_qty)             AS fulfilled,
-        GREATEST(COALESCE(o.ordered, 0) - i.sku_qty, 0)      AS phantom,
-        GREATEST(i.sku_qty - COALESCE(o.ordered, 0), 0)      AS remaining,
-        i.sku_is_undefined                                   AS is_undefined
-      FROM inv_agg i
-      LEFT JOIN orders_agg o ON i.sku = o.effective_sku
-    )`;
 
   // ─────────────────────────────────────────────────────────────────────────
   // computeSummary — ALL dashboard KPIs in one query
