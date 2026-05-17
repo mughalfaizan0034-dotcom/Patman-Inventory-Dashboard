@@ -1,5 +1,5 @@
 import { TABLES } from '../config/tables.js';
-import { effectiveSkuSql } from '../utils/skuPatterns.js';
+import { ordersAggCTE } from '../utils/skuPivots.js';
 
 // Inventory repo. The canonical inventory READ path (SKU View + dashboard
 // KPIs) lives in inventoryMetricsService, which owns the centralized
@@ -83,21 +83,14 @@ export function createInventoryRepository({ bq, projectId }) {
           AND TRIM(box_number) != ''
         GROUP BY box_number
       ),
-      ord_summary AS (
-        SELECT
-          ${effectiveSkuSql()} AS effective_sku,
-          SUM(quantity_sold) AS units_sold
-        FROM ${ordTable}
-        WHERE organization_id = @organizationId
-        GROUP BY effective_sku
-      ),
+      ${ordersAggCTE({ ordTable })},
       box_orders AS (
         SELECT
           inv.box_number,
-          SUM(COALESCE(o.units_sold, 0)) AS total_sold
+          SUM(COALESCE(o.ordered, 0)) AS total_sold
         FROM inv_agg inv,
         UNNEST(inv.skus) AS inv_sku
-        LEFT JOIN ord_summary o ON o.effective_sku = inv_sku
+        LEFT JOIN orders_agg o ON o.effective_sku = inv_sku
         GROUP BY inv.box_number
       )
       SELECT

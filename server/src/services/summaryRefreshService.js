@@ -49,45 +49,12 @@ export function createSummaryRefreshService({ bq, projectId, orgsRepo, logger })
     return { params, regexParam };
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Shared CTE fragments — kept identical to inventoryMetricsService so
-  // summary rebuild output matches the live computation byte-for-byte
-  // until Phase B cutover. If the math changes in one place, change here.
-  // ─────────────────────────────────────────────────────────────────────
-  const _ordersAggCTE = () => `
-    orders_agg AS (
-      SELECT
-        ${effectiveSkuSql()} AS effective_sku,
-        SUM(quantity_sold) AS ordered
-      FROM ${ordTable}
-      WHERE organization_id = @organizationId
-      GROUP BY effective_sku
-    )`;
-
-  const _invAggCTE = (regexParam) => `
-    inv_agg AS (
-      SELECT
-        sku,
-        SUM(quantity)         AS sku_qty,
-        ${isUndefinedSql('sku', regexParam ? { regexParam } : {})} AS sku_is_undefined
-      FROM ${invTable}
-      WHERE organization_id = @organizationId
-      GROUP BY sku
-    )`;
-
-  const _perSkuCTE = () => `
-    per_sku AS (
-      SELECT
-        i.sku,
-        i.sku_qty                                            AS initial,
-        COALESCE(o.ordered, 0)                               AS sold,
-        LEAST(COALESCE(o.ordered, 0), i.sku_qty)             AS fulfilled,
-        GREATEST(COALESCE(o.ordered, 0) - i.sku_qty, 0)      AS phantom,
-        GREATEST(i.sku_qty - COALESCE(o.ordered, 0), 0)      AS remaining,
-        i.sku_is_undefined                                   AS is_undefined
-      FROM inv_agg i
-      LEFT JOIN orders_agg o ON i.sku = o.effective_sku
-    )`;
+  // CTE builders imported from utils/skuPivots.js — single source of truth
+  // shared with inventoryMetricsService. Live computation and materialized
+  // rebuild cannot drift because they're literally the same SQL text.
+  const _ordersAggCTE  = ()           => ordersAggCTE({ ordTable });
+  const _invAggCTE     = (regexParam) => invAggCTE({ invTable, regexParam });
+  const _perSkuCTE     = ()           => perSkuCTE();
 
   // ─────────────────────────────────────────────────────────────────────
   // dashboard_summary — one row per org
@@ -255,20 +222,13 @@ export function createSummaryRefreshService({ bq, projectId, orgsRepo, logger })
         FROM ${invTable}
         WHERE organization_id = @organizationId
       ),
-      ord_summary AS (
-        SELECT
-          ${effectiveSkuSql()} AS effective_sku,
-          SUM(quantity_sold)   AS units_sold
-        FROM ${ordTable}
-        WHERE organization_id = @organizationId
-        GROUP BY effective_sku
-      ),
+      ${ordersAggCTE({ ordTable })},
       box_orders AS (
         SELECT
           s.upc, s.part_number, s.box_number,
-          COALESCE(SUM(o.units_sold), 0) AS units_sold
+          COALESCE(SUM(o.ordered), 0) AS units_sold
         FROM inv_skus s
-        LEFT JOIN ord_summary o ON s.sku = o.effective_sku
+        LEFT JOIN orders_agg o ON s.sku = o.effective_sku
         GROUP BY s.upc, s.part_number, s.box_number
       )
       SELECT

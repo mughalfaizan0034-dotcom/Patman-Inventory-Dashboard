@@ -1,5 +1,5 @@
 import { TABLES } from '../config/tables.js';
-import { effectiveSkuSql } from '../utils/skuPatterns.js';
+import { ordersAggCTE } from '../utils/skuPivots.js';
 
 export function createLookupRepository({ bq, projectId }) {
   const invTable = `\`${projectId}.${TABLES.INVENTORY}\``;
@@ -44,20 +44,13 @@ export function createLookupRepository({ bq, projectId }) {
             OR LOWER(TRIM(COALESCE(part_number, ''))) = LOWER(TRIM(@query))
           )
       ),
-      ord_summary AS (
-        SELECT
-          ${effectiveSkuSql()} AS effective_sku,
-          SUM(quantity_sold) AS units_sold
-        FROM ${ordTable}
-        WHERE organization_id = @organizationId
-        GROUP BY effective_sku
-      ),
+      ${ordersAggCTE({ ordTable })},
       box_orders AS (
         SELECT
           s.upc, s.part_number, s.box_number,
-          COALESCE(SUM(o.units_sold), 0) AS units_sold
+          COALESCE(SUM(o.ordered), 0) AS units_sold
         FROM inv_skus s
-        LEFT JOIN ord_summary o ON s.sku = o.effective_sku
+        LEFT JOIN orders_agg o ON s.sku = o.effective_sku
         GROUP BY s.upc, s.part_number, s.box_number
       )
       SELECT
